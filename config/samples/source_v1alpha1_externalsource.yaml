@@ -1,0 +1,18 @@
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  labels:
+    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: externalsource-sample
+spec:
+  interval: 5m
+  destinationPath: config.json
+  generator:
+    type: http
+    http:
+      url: https://api.example.com/config
+      method: GET
+  transform:
+    type: cel
+    expression: 'has(data.config) ? data.config : data'

@@ -1,0 +1,13 @@
+apiVersion: source.example.com/v1alpha1
+kind: ExternalArtifact
+metadata:
+  labels:
+    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: externalartifact-sample
+spec:
+  url: https://storage.example.com/artifacts/config-abc123.tar.gz
+  revision: abc123def456
+  metadata:
+    source: externalsource-sample
+    contentType: application/json
