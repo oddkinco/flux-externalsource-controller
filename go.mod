@@ -1,6 +1,6 @@
 module github.com/oddkin/flux-externalsource-controller
 
-go 1.24.5
+go 1.24.6
 
 require (
 	github.com/google/cel-go v0.26.0

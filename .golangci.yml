@@ -3,6 +3,10 @@ version: "2"
 run:
   timeout: 5m
   allow-parallel-runners: true
+  skip-dirs:
+    - third_party
+    - builtin
+    - examples
 
 linters:
   default: none
@@ -32,7 +36,3 @@ issues:
       linters:
         - dupl
         - lll
-  exclude-dirs:
-    - third_party
-    - builtin
-    - examples

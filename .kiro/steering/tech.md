@@ -1,7 +1,7 @@
 # Technology Stack
 
 ## Framework & Language
-- **Go 1.24.5**: Primary programming language
+- **Go 1.24.6**: Primary programming language
 - **Kubebuilder v4.9.0**: Kubernetes operator framework for scaffolding and code generation
 - **Controller Runtime v0.22.1**: Core controller reconciliation framework
 
