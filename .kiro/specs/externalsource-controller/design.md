@@ -440,3 +440,7 @@ type ArtifactMetadata struct {
 - Multi-environment deployment validation
 - Disaster recovery and controller restart scenarios
 - Security validation with TLS and authentication
+
+## License
+
+This project will be published under a permissive open-source license modeled on [the "MIT License"](https://opensource.org/license/mit)
