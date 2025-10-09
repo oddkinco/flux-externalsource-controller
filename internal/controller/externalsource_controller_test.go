@@ -868,3 +868,430 @@ func findCondition(conditions []metav1.Condition, conditionType string) *metav1.
 	}
 	return nil
 }
+
+// Tests for metrics and status condition management
+var _ = Describe("ExternalSource Controller Metrics and Status", func() {
+	Context("Status condition management", func() {
+		var (
+			externalSource *sourcev1alpha1.ExternalSource
+			reconciler     *ExternalSourceReconciler
+		)
+
+		BeforeEach(func() {
+			externalSource = &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-status",
+					Namespace:  "default",
+					Generation: 1,
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+			}
+
+			reconciler = &ExternalSourceReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+		})
+
+		It("should set conditions with proper observedGeneration", func() {
+			reconciler.setCondition(externalSource, ReadyCondition, metav1.ConditionTrue, SucceededReason, "Test message")
+
+			Expect(externalSource.Status.Conditions).To(HaveLen(1))
+			condition := externalSource.Status.Conditions[0]
+			Expect(condition.Type).To(Equal(ReadyCondition))
+			Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(condition.Reason).To(Equal(SucceededReason))
+			Expect(condition.Message).To(Equal("Test message"))
+			Expect(condition.ObservedGeneration).To(Equal(externalSource.Generation))
+		})
+
+		It("should use setReadyCondition helper correctly", func() {
+			reconciler.setReadyCondition(externalSource, metav1.ConditionFalse, FailedReason, "Error occurred")
+
+			condition := findCondition(externalSource.Status.Conditions, ReadyCondition)
+			Expect(condition).NotTo(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal(FailedReason))
+			Expect(condition.Message).To(Equal("Error occurred"))
+		})
+
+		It("should use setProgressCondition helper correctly", func() {
+			// Set progress condition to true (in progress)
+			reconciler.setProgressCondition(externalSource, FetchingCondition, true, ProgressingReason, "Fetching data")
+
+			condition := findCondition(externalSource.Status.Conditions, FetchingCondition)
+			Expect(condition).NotTo(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(condition.Reason).To(Equal(ProgressingReason))
+
+			// Set progress condition to false (completed)
+			reconciler.setProgressCondition(externalSource, FetchingCondition, false, SucceededReason, "Fetch completed")
+
+			condition = findCondition(externalSource.Status.Conditions, FetchingCondition)
+			Expect(condition).NotTo(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal(SucceededReason))
+		})
+
+		It("should clear progress conditions correctly", func() {
+			// Set multiple progress conditions
+			reconciler.setProgressCondition(externalSource, FetchingCondition, true, ProgressingReason, "Fetching")
+			reconciler.setProgressCondition(externalSource, TransformingCondition, true, ProgressingReason, "Transforming")
+			reconciler.setProgressCondition(externalSource, StoringCondition, true, ProgressingReason, "Storing")
+			reconciler.setReadyCondition(externalSource, metav1.ConditionTrue, SucceededReason, "Ready")
+
+			Expect(externalSource.Status.Conditions).To(HaveLen(4))
+
+			// Clear progress conditions
+			reconciler.clearProgressConditions(externalSource)
+
+			// Only Ready condition should remain
+			Expect(externalSource.Status.Conditions).To(HaveLen(1))
+			condition := findCondition(externalSource.Status.Conditions, ReadyCondition)
+			Expect(condition).NotTo(BeNil())
+
+			// Progress conditions should be removed
+			Expect(findCondition(externalSource.Status.Conditions, FetchingCondition)).To(BeNil())
+			Expect(findCondition(externalSource.Status.Conditions, TransformingCondition)).To(BeNil())
+			Expect(findCondition(externalSource.Status.Conditions, StoringCondition)).To(BeNil())
+		})
+
+		It("should check conditions correctly with hasCondition", func() {
+			reconciler.setReadyCondition(externalSource, metav1.ConditionTrue, SucceededReason, "Ready")
+
+			Expect(reconciler.hasCondition(externalSource, ReadyCondition, metav1.ConditionTrue)).To(BeTrue())
+			Expect(reconciler.hasCondition(externalSource, ReadyCondition, metav1.ConditionFalse)).To(BeFalse())
+			Expect(reconciler.hasCondition(externalSource, FetchingCondition, metav1.ConditionTrue)).To(BeFalse())
+		})
+
+		It("should get condition messages correctly", func() {
+			testMessage := "Test condition message"
+			reconciler.setReadyCondition(externalSource, metav1.ConditionTrue, SucceededReason, testMessage)
+
+			message := reconciler.getConditionMessage(externalSource, ReadyCondition)
+			Expect(message).To(Equal(testMessage))
+
+			// Non-existent condition should return empty string
+			message = reconciler.getConditionMessage(externalSource, FetchingCondition)
+			Expect(message).To(Equal(""))
+		})
+
+		It("should update conditions when they change", func() {
+			// Set initial condition
+			reconciler.setReadyCondition(externalSource, metav1.ConditionFalse, FailedReason, "Initial failure")
+			
+			initialCondition := findCondition(externalSource.Status.Conditions, ReadyCondition)
+			Expect(initialCondition).NotTo(BeNil())
+			initialTime := initialCondition.LastTransitionTime
+
+			// Wait a bit to ensure time difference
+			time.Sleep(10 * time.Millisecond)
+
+			// Update condition with different status
+			reconciler.setReadyCondition(externalSource, metav1.ConditionTrue, SucceededReason, "Now successful")
+
+			updatedCondition := findCondition(externalSource.Status.Conditions, ReadyCondition)
+			Expect(updatedCondition).NotTo(BeNil())
+			Expect(updatedCondition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(updatedCondition.Reason).To(Equal(SucceededReason))
+			Expect(updatedCondition.Message).To(Equal("Now successful"))
+			Expect(updatedCondition.LastTransitionTime.After(initialTime.Time)).To(BeTrue())
+		})
+	})
+
+	Context("Metrics integration", func() {
+		var (
+			mockMetrics *MockMetricsRecorder
+			reconciler  *ExternalSourceReconciler
+		)
+
+		BeforeEach(func() {
+			mockMetrics = &MockMetricsRecorder{}
+			reconciler = &ExternalSourceReconciler{
+				Client:          k8sClient,
+				Scheme:          k8sClient.Scheme(),
+				MetricsRecorder: mockMetrics,
+			}
+		})
+
+		It("should record reconciliation metrics on success", func() {
+			resourceName := "test-metrics-success"
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			// Set up reconciler with required dependencies
+			mockFactory := NewMockGeneratorFactory()
+			mockTransformer := &MockTransformer{}
+			mockArtifactManager := &MockArtifactManager{}
+
+			reconciler.GeneratorFactory = mockFactory
+			reconciler.Transformer = mockTransformer
+			reconciler.ArtifactManager = mockArtifactManager
+
+			// Register mock HTTP generator
+			Expect(mockFactory.RegisterGenerator("http", func() generator.SourceGenerator {
+				return &MockSourceGenerator{}
+			})).To(Succeed())
+
+			By("creating an ExternalSource resource")
+			resource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("performing reconciliation")
+			// First reconcile adds finalizer
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second reconcile performs actual work
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("verifying metrics were recorded")
+			Expect(mockMetrics.RecordReconciliationCalls).To(HaveLen(1)) // One reconcile call
+			
+			// Check the reconciliation call
+			call := mockMetrics.RecordReconciliationCalls[0]
+			Expect(call.Namespace).To(Equal("default"))
+			Expect(call.Name).To(Equal(resourceName))
+			Expect(call.SourceType).To(Equal("http"))
+			// The call might fail due to ExternalArtifact creation, but metrics should still be recorded
+			Expect(call.Duration).To(BeNumerically(">", 0))
+
+			Expect(mockMetrics.IncActiveReconciliationsCalls).To(HaveLen(2))
+			Expect(mockMetrics.DecActiveReconciliationsCalls).To(HaveLen(2))
+
+			By("cleaning up the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+
+		It("should record reconciliation metrics on failure", func() {
+			resourceName := "test-metrics-failure"
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			// Set up reconciler with failing generator
+			mockFactory := NewMockGeneratorFactory()
+			mockTransformer := &MockTransformer{}
+			mockArtifactManager := &MockArtifactManager{}
+
+			reconciler.GeneratorFactory = mockFactory
+			reconciler.Transformer = mockTransformer
+			reconciler.ArtifactManager = mockArtifactManager
+
+			// Register mock HTTP generator that fails
+			Expect(mockFactory.RegisterGenerator("http", func() generator.SourceGenerator {
+				return &MockSourceGenerator{
+					GenerateFunc: func(ctx context.Context, config generator.GeneratorConfig) (*generator.SourceData, error) {
+						return nil, fmt.Errorf("network error")
+					},
+				}
+			})).To(Succeed())
+
+			By("creating an ExternalSource resource")
+			resource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("performing reconciliation")
+			// First reconcile adds finalizer
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second reconcile should fail
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred()) // Controller handles errors internally
+
+			By("verifying failure metrics were recorded")
+			Expect(mockMetrics.RecordReconciliationCalls).To(HaveLen(1))
+			call := mockMetrics.RecordReconciliationCalls[0] // First call should be the failure
+			Expect(call.Success).To(BeFalse())
+
+			By("cleaning up the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+
+		It("should track active reconciliations correctly", func() {
+			resourceName := "test-active-tracking"
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			// Set up reconciler with required dependencies
+			mockFactory := NewMockGeneratorFactory()
+			mockTransformer := &MockTransformer{}
+			mockArtifactManager := &MockArtifactManager{}
+
+			reconciler.GeneratorFactory = mockFactory
+			reconciler.Transformer = mockTransformer
+			reconciler.ArtifactManager = mockArtifactManager
+
+			// Register mock HTTP generator
+			Expect(mockFactory.RegisterGenerator("http", func() generator.SourceGenerator {
+				return &MockSourceGenerator{}
+			})).To(Succeed())
+
+			By("creating an ExternalSource resource")
+			resource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("performing reconciliation")
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("verifying active reconciliation tracking")
+			Expect(mockMetrics.IncActiveReconciliationsCalls).To(HaveLen(1))
+			incCall := mockMetrics.IncActiveReconciliationsCalls[0]
+			Expect(incCall.Namespace).To(Equal("default"))
+			Expect(incCall.Name).To(Equal(resourceName))
+
+			Expect(mockMetrics.DecActiveReconciliationsCalls).To(HaveLen(1))
+			decCall := mockMetrics.DecActiveReconciliationsCalls[0]
+			Expect(decCall.Namespace).To(Equal("default"))
+			Expect(decCall.Name).To(Equal(resourceName))
+
+			By("cleaning up the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+	})
+})
+
+// MockMetricsRecorder for testing metrics integration
+type MockMetricsRecorder struct {
+	RecordReconciliationCalls     []RecordReconciliationCall
+	RecordSourceRequestCalls      []RecordSourceRequestCall
+	RecordTransformationCalls     []RecordTransformationCall
+	RecordArtifactOperationCalls  []RecordArtifactOperationCall
+	IncActiveReconciliationsCalls []ActiveReconciliationCall
+	DecActiveReconciliationsCalls []ActiveReconciliationCall
+}
+
+type RecordReconciliationCall struct {
+	Namespace  string
+	Name       string
+	SourceType string
+	Success    bool
+	Duration   time.Duration
+}
+
+type RecordSourceRequestCall struct {
+	SourceType string
+	Success    bool
+	Duration   time.Duration
+}
+
+type RecordTransformationCall struct {
+	Success  bool
+	Duration time.Duration
+}
+
+type RecordArtifactOperationCall struct {
+	Operation string
+	Success   bool
+	Duration  time.Duration
+}
+
+type ActiveReconciliationCall struct {
+	Namespace string
+	Name      string
+}
+
+func (m *MockMetricsRecorder) RecordReconciliation(namespace, name, sourceType string, success bool, duration time.Duration) {
+	m.RecordReconciliationCalls = append(m.RecordReconciliationCalls, RecordReconciliationCall{
+		Namespace:  namespace,
+		Name:       name,
+		SourceType: sourceType,
+		Success:    success,
+		Duration:   duration,
+	})
+}
+
+func (m *MockMetricsRecorder) RecordSourceRequest(sourceType string, success bool, duration time.Duration) {
+	m.RecordSourceRequestCalls = append(m.RecordSourceRequestCalls, RecordSourceRequestCall{
+		SourceType: sourceType,
+		Success:    success,
+		Duration:   duration,
+	})
+}
+
+func (m *MockMetricsRecorder) RecordTransformation(success bool, duration time.Duration) {
+	m.RecordTransformationCalls = append(m.RecordTransformationCalls, RecordTransformationCall{
+		Success:  success,
+		Duration: duration,
+	})
+}
+
+func (m *MockMetricsRecorder) RecordArtifactOperation(operation string, success bool, duration time.Duration) {
+	m.RecordArtifactOperationCalls = append(m.RecordArtifactOperationCalls, RecordArtifactOperationCall{
+		Operation: operation,
+		Success:   success,
+		Duration:  duration,
+	})
+}
+
+func (m *MockMetricsRecorder) IncActiveReconciliations(namespace, name string) {
+	m.IncActiveReconciliationsCalls = append(m.IncActiveReconciliationsCalls, ActiveReconciliationCall{
+		Namespace: namespace,
+		Name:      name,
+	})
+}
+
+func (m *MockMetricsRecorder) DecActiveReconciliations(namespace, name string) {
+	m.DecActiveReconciliationsCalls = append(m.DecActiveReconciliationsCalls, ActiveReconciliationCall{
+		Namespace: namespace,
+		Name:      name,
+	})
+}

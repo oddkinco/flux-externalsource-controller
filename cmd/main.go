@@ -43,6 +43,7 @@ import (
 
 	sourcev1alpha1 "github.com/example/externalsource-controller/api/v1alpha1"
 	"github.com/example/externalsource-controller/internal/controller"
+	"github.com/example/externalsource-controller/internal/metrics"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -184,9 +185,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize metrics recorder
+	metricsRecorder := metrics.NewPrometheusRecorder()
+
 	if err := (&controller.ExternalSourceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		MetricsRecorder: metricsRecorder,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ExternalSource")
 		os.Exit(1)

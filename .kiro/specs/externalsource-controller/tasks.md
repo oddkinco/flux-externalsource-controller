@@ -96,18 +96,18 @@
     - Verify error handling and retry logic with exponential backoff
     - _Requirements: 3.1, 8.1, 8.2_
 
-- [ ] 7. Implement observability and monitoring
-  - [ ] 7.1 Add Prometheus metrics collection
+- [x] 7. Implement observability and monitoring
+  - [x] 7.1 Add Prometheus metrics collection
     - Implement metrics for reconciliation count, duration, and success/failure rates
     - Add source-type-specific metrics for request latency and errors
     - _Requirements: 7.2, 7.3, 7.4_
   
-  - [ ] 7.2 Enhance status condition management
+  - [x] 7.2 Enhance status condition management
     - Implement comprehensive status conditions (Ready, Fetching, Transforming, Storing, Stalled)
     - Add detailed error messages and observedGeneration tracking
     - _Requirements: 7.1, 7.5_
   
-  - [ ] 7.3 Write tests for metrics and status updates
+  - [x] 7.3 Write tests for metrics and status updates
     - Verify metrics are properly recorded for different scenarios
     - Test status condition transitions and error reporting
     - _Requirements: 7.1, 7.2, 7.3_
