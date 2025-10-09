@@ -6,18 +6,18 @@
   - Set up project directory structure for controllers, generators, and storage
   - _Requirements: 1.1, 2.1, 2.2_
 
-- [ ] 2. Implement ExternalSource CRD and basic controller scaffold
-  - [ ] 2.1 Create ExternalSource CRD with modular generator specification
+- [x] 2. Implement ExternalSource CRD and basic controller scaffold
+  - [x] 2.1 Create ExternalSource CRD with modular generator specification
     - Define CRD schema with generator type field and HTTP-specific configuration
     - Implement validation rules for generator types and required fields
     - _Requirements: 1.1, 1.2, 2.4_
   
-  - [ ] 2.2 Generate controller scaffold using Kubebuilder
+  - [x] 2.2 Generate controller scaffold using Kubebuilder
     - Create basic reconciler structure with status management
     - Set up controller manager and webhook configurations
     - _Requirements: 1.1, 7.1_
   
-  - [ ] 2.3 Write unit tests for CRD validation
+  - [x] 2.3 Write unit tests for CRD validation
     - Test CRD schema validation with valid and invalid configurations
     - Verify generator type validation and required field enforcement
     - _Requirements: 1.1, 1.2_

@@ -5,8 +5,24 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - source.example.com
   resources:
+  - externalartifacts
   - externalsources
   verbs:
   - create
@@ -19,14 +35,15 @@ rules:
 - apiGroups:
   - source.example.com
   resources:
-  - externalsources/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - source.example.com
-  resources:
+  - externalartifacts/status
   - externalsources/status
   verbs:
   - get
   - patch
+  - update
+- apiGroups:
+  - source.example.com
+  resources:
+  - externalsources/finalizers
+  verbs:
   - update
