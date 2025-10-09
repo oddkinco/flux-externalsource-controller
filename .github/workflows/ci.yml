@@ -36,6 +36,15 @@ jobs:
     - name: Download dependencies
       run: go mod download
 
+    - name: Install controller-gen
+      run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+
+    - name: Generate code
+      run: make generate
+
+    - name: Generate manifests
+      run: make manifests
+
     - name: Run tests
       run: make test-ci
 
