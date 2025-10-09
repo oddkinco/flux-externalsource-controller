@@ -1,36 +1,32 @@
-run:
-  timeout: 5m
-  allow-parallel-runners: true
-  skip-dirs:
-    - third_party
-    - builtin
-    - examples
+# golangci-lint v2.x configuration
+version: "2"
 
 linters:
-  disable-all: true
   enable:
-    - copyloopvar
-    - dupl
     - errcheck
-    - ginkgolinter
-    - goconst
-    - gocyclo
+    - gosimple
     - govet
     - ineffassign
-    - misspell
-    - nakedret
-    - prealloc
     - staticcheck
+    - unused
+    - dupl
+    - goconst
+    - gocyclo
+    - misspell
     - unconvert
     - unparam
-    - unused
-
-issues:
-  exclude-rules:
-    - path: api/
-      linters:
-        - lll
-    - path: internal/
-      linters:
-        - dupl
-        - lll
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+    rules:
+      - path: api/
+        text: "Line too long"
+      - path: internal/
+        text: "duplicate"
