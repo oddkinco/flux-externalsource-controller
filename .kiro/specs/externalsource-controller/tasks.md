@@ -38,39 +38,39 @@
     - Mock HTTP responses for various scenarios (success, failure, ETag)
     - _Requirements: 2.1, 2.2, 1.3_
 
-- [ ] 4. Implement data transformation system
-  - [ ] 4.1 Create transformer interface and CEL implementation
+- [x] 4. Implement data transformation system
+  - [x] 4.1 Create transformer interface and CEL implementation
     - Define Transformer interface for pluggable transformation engines
     - Implement CEL transformer with sandboxed execution and timeout handling
     - _Requirements: 4.1, 4.2, 4.3_
   
-  - [ ] 4.2 Write unit tests for transformation logic
+  - [x] 4.2 Write unit tests for transformation logic
     - Test CEL expression execution with valid and invalid expressions
     - Verify timeout and error handling for malicious expressions
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 5. Implement artifact management system
-  - [ ] 5.1 Create artifact manager with packaging logic
+- [x] 5. Implement artifact management system
+  - [x] 5.1 Create artifact manager with packaging logic
     - Implement .tar.gz archive creation with proper directory structure
     - Add SHA256 digest calculation for content-based versioning
     - _Requirements: 5.1, 5.2, 5.3_
   
-  - [ ] 5.2 Implement modular storage backend interface
+  - [x] 5.2 Implement modular storage backend interface
     - Define StorageBackend interface for pluggable storage implementations
     - Create S3-compatible storage backend with proper error handling
     - _Requirements: 9.1, 9.2, 9.4_
   
-  - [ ] 5.3 Implement in-memory storage backend for development
+  - [x] 5.3 Implement in-memory storage backend for development
     - Create MemoryBackend for non-persistent development storage
     - Add clear warnings about non-persistence across restarts
     - _Requirements: 9.3, 9.5_
   
-  - [ ] 5.4 Add artifact garbage collection logic
+  - [x] 5.4 Add artifact garbage collection logic
     - Implement cleanup of obsolete artifacts when new versions are created
     - Ensure only current revision is retained per ExternalSource
     - _Requirements: 5.5_
   
-  - [ ] 5.5 Write unit tests for artifact management
+  - [x] 5.5 Write unit tests for artifact management
     - Test archive creation, storage operations, and garbage collection
     - Mock storage backends for testing different scenarios
     - _Requirements: 5.1, 5.2, 5.5, 9.1_

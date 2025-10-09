@@ -32,7 +32,7 @@ type ArtifactManager interface {
 	Package(ctx context.Context, data []byte, path string) (*Artifact, error)
 
 	// Store uploads the artifact to the storage backend and returns the URL
-	Store(ctx context.Context, artifact *Artifact) (string, error)
+	Store(ctx context.Context, artifact *Artifact, source string) (string, error)
 
 	// Cleanup removes obsolete artifacts, keeping only the specified revision
 	Cleanup(ctx context.Context, source string, keepRevision string) error

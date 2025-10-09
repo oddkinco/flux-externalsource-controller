@@ -128,8 +128,6 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 Copyright (c) 2025 Odd Kin <oddkin@oddkin.co>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
