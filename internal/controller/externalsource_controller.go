@@ -861,13 +861,13 @@ func (r *ExternalSourceReconciler) performRecovery(ctx context.Context, external
 
 	// If we have a last successful artifact, ensure the ExternalArtifact child resource exists
 	if externalSource.Status.Artifact != nil {
-		artifact := externalSource.Status.Artifact
+		statusArtifact := externalSource.Status.Artifact
 		log.Info("Recovering with last successful artifact",
-			"url", artifact.URL, "revision", artifact.Revision)
+			"url", statusArtifact.URL, "revision", statusArtifact.Revision)
 
 		// Ensure ExternalArtifact child resource is properly created/updated
 		if err := r.reconcileExternalArtifact(ctx, externalSource,
-			artifact.URL, artifact.Revision, artifact.Metadata); err != nil {
+			statusArtifact.URL, statusArtifact.Revision, statusArtifact.Metadata); err != nil {
 			log.Error(err, "Failed to recover ExternalArtifact during controller restart")
 		}
 
@@ -883,21 +883,6 @@ func (r *ExternalSourceReconciler) performRecovery(ctx context.Context, external
 
 	// Clear any stalled condition since we're actively recovering
 	apimeta.RemoveStatusCondition(&externalSource.Status.Conditions, StalledCondition)
-}
-
-// validateArtifactIntegrity checks if the stored artifact is still accessible
-func (r *ExternalSourceReconciler) validateArtifactIntegrity(ctx context.Context, externalSource *sourcev1alpha1.ExternalSource) bool {
-	if externalSource.Status.Artifact == nil {
-		return false
-	}
-
-	// For now, we assume the artifact is valid if it exists in status
-	// In a more sophisticated implementation, we could:
-	// 1. Check if the artifact URL is still accessible
-	// 2. Verify the artifact checksum
-	// 3. Validate the ExternalArtifact child resource exists
-
-	return true
 }
 
 // SetupWithManager sets up the controller with the Manager.

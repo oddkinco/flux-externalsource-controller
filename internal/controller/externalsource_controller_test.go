@@ -25,7 +25,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1380,9 +1379,9 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 			}
 
 			delay = reconciler.calculateRetryDelay(externalSource, transientErr)
-			expectedDelay := time.Duration(float64(baseRetryDelay) * math.Pow(2, 3)) // 2^3 = 8
-			Expect(delay).To(BeNumerically(">=", expectedDelay/2))                   // Account for jitter
-			Expect(delay).To(BeNumerically("<=", expectedDelay*2))                   // Account for jitter
+			expectedDelay := time.Duration(float64(baseRetryDelay) * 8) // 2^3 = 8
+			Expect(delay).To(BeNumerically(">=", expectedDelay/2))      // Account for jitter
+			Expect(delay).To(BeNumerically("<=", expectedDelay*2))      // Account for jitter
 
 			By("returning zero delay for configuration errors")
 			configErr := fmt.Errorf("invalid interval format")
@@ -1555,11 +1554,11 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 
 			By("performing reconciliation")
 			// First reconcile adds finalizer
-			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Second reconcile should fail but maintain previous artifact
-			result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
@@ -1834,11 +1833,11 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 
 			By("performing reconciliation")
 			// First reconcile adds finalizer
-			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Second reconcile should fail with configuration error and not retry
-			result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeZero()) // No retry for config errors
 
@@ -1895,11 +1894,11 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 
 			By("performing reconciliation")
 			// First reconcile adds finalizer
-			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Second reconcile should fail with permanent error
-			result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(5 * time.Minute)) // Regular interval, no retry
 
