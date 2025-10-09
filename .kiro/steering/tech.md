@@ -14,7 +14,7 @@
 - **Make**: Primary build orchestration
 - **Docker/Podman**: Container image building (`CONTAINER_TOOL` configurable)
 - **Kustomize**: Kubernetes manifest management and deployment
-- **golangci-lint**: Code linting and style enforcement
+- **golangci-lint v1.62.2**: Code linting and style enforcement
 
 ## Testing Framework
 - **Ginkgo v2**: BDD testing framework
