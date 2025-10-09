@@ -30,19 +30,19 @@ import (
 type MetricsRecorder interface {
 	// RecordReconciliation records a reconciliation attempt with its outcome
 	RecordReconciliation(namespace, name, sourceType string, success bool, duration time.Duration)
-	
+
 	// RecordSourceRequest records a request to an external source
 	RecordSourceRequest(sourceType string, success bool, duration time.Duration)
-	
+
 	// RecordTransformation records a data transformation attempt
 	RecordTransformation(success bool, duration time.Duration)
-	
+
 	// RecordArtifactOperation records an artifact storage operation
 	RecordArtifactOperation(operation string, success bool, duration time.Duration)
-	
+
 	// IncActiveReconciliations increments the count of active reconciliations
 	IncActiveReconciliations(namespace, name string)
-	
+
 	// DecActiveReconciliations decrements the count of active reconciliations
 	DecActiveReconciliations(namespace, name string)
 }

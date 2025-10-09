@@ -47,27 +47,27 @@ import (
 // ExternalSourceReconciler reconciles a ExternalSource object
 type ExternalSourceReconciler struct {
 	client.Client
-	Scheme            *runtime.Scheme
-	GeneratorFactory  generator.SourceGeneratorFactory
-	Transformer       transformer.Transformer
-	ArtifactManager   artifact.ArtifactManager
-	MetricsRecorder   metrics.MetricsRecorder
+	Scheme           *runtime.Scheme
+	GeneratorFactory generator.SourceGeneratorFactory
+	Transformer      transformer.Transformer
+	ArtifactManager  artifact.ArtifactManager
+	MetricsRecorder  metrics.MetricsRecorder
 }
 
 const (
 	// ExternalSourceFinalizer is the finalizer used by the ExternalSource controller
 	ExternalSourceFinalizer = "source.example.com/externalsource-finalizer"
-	
+
 	// Retry configuration
 	maxRetryAttempts = 10
 	baseRetryDelay   = 1 * time.Second
 	maxRetryDelay    = 5 * time.Minute
 	jitterFactor     = 0.25 // ±25% jitter
-	
+
 	// Annotation keys for retry tracking
-	retryCountAnnotation     = "source.example.com/retry-count"
-	lastFailureAnnotation    = "source.example.com/last-failure"
-	backoffStartAnnotation   = "source.example.com/backoff-start"
+	retryCountAnnotation   = "source.example.com/retry-count"
+	lastFailureAnnotation  = "source.example.com/last-failure"
+	backoffStartAnnotation = "source.example.com/backoff-start"
 )
 
 // Condition types for ExternalSource
@@ -179,22 +179,22 @@ func (r *ExternalSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Check for controller restart recovery
 	if r.needsRecovery(&externalSource) {
-		log.Info("Detected controller restart, performing recovery", 
+		log.Info("Detected controller restart, performing recovery",
 			"last_artifact", externalSource.Status.Artifact != nil)
 		r.performRecovery(ctx, &externalSource)
 	}
 
 	// Store previous artifact info for graceful degradation
 	previousArtifact := externalSource.Status.Artifact
-	
+
 	// Perform reconciliation
 	_, err = r.reconcile(ctx, &externalSource)
-	
+
 	// Record reconciliation metrics
 	sourceType := externalSource.Spec.Generator.Type
 	reconciliationSuccess := err == nil
 	reconciliationDuration := time.Since(startTime)
-	
+
 	if r.MetricsRecorder != nil {
 		r.MetricsRecorder.RecordReconciliation(
 			externalSource.Namespace,
@@ -204,45 +204,45 @@ func (r *ExternalSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			reconciliationDuration,
 		)
 	}
-	
+
 	if err != nil {
 		log.Error(err, "Reconciliation failed")
-		
+
 		// Reset retry count if spec has changed
 		if r.shouldResetRetryCount(&externalSource) {
 			r.clearRetryCount(&externalSource)
 		}
-		
+
 		// Determine if this is a transient error that should be retried
 		retryDelay := r.calculateRetryDelay(&externalSource, err)
 		errorType := r.classifyError(err)
-		
+
 		if retryDelay > 0 && errorType == TransientError {
 			retryCount := r.getRetryCount(&externalSource)
 			backoffDuration := r.getBackoffDuration(&externalSource)
-			
+
 			// Maintain last successful artifact during transient failures (graceful degradation)
 			if previousArtifact != nil {
 				externalSource.Status.Artifact = previousArtifact
-				log.Info("Maintaining last successful artifact during transient failure", 
+				log.Info("Maintaining last successful artifact during transient failure",
 					"artifact_url", previousArtifact.URL, "revision", previousArtifact.Revision)
 			}
-			
-			r.setReadyCondition(&externalSource, metav1.ConditionFalse, FailedReason, 
-				fmt.Sprintf("Reconciliation failed (attempt %d/%d, in backoff for %v), retrying in %v. Last successful artifact maintained: %v", 
+
+			r.setReadyCondition(&externalSource, metav1.ConditionFalse, FailedReason,
+				fmt.Sprintf("Reconciliation failed (attempt %d/%d, in backoff for %v), retrying in %v. Last successful artifact maintained: %v",
 					retryCount+1, maxRetryAttempts, backoffDuration.Truncate(time.Second), retryDelay.Truncate(time.Second), err.Error()))
-			
+
 			r.incrementRetryCount(&externalSource, err)
-			
+
 			if statusErr := r.Status().Update(ctx, &externalSource); statusErr != nil {
 				log.Error(statusErr, "Failed to update status after reconciliation error")
 			}
-			
+
 			return ctrl.Result{RequeueAfter: retryDelay}, nil
 		} else {
 			// Max retries exceeded, permanent error, or configuration error
 			var reason, message string
-			
+
 			switch errorType {
 			case ConfigurationError:
 				reason = "ConfigurationError"
@@ -255,22 +255,22 @@ func (r *ExternalSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				message = fmt.Sprintf("Max retries exceeded (%d attempts): %v", maxRetryAttempts, err.Error())
 				r.setCondition(&externalSource, StalledCondition, metav1.ConditionTrue, reason, message)
 			}
-			
+
 			r.setReadyCondition(&externalSource, metav1.ConditionFalse, reason, message)
-			
+
 			if statusErr := r.Status().Update(ctx, &externalSource); statusErr != nil {
 				log.Error(statusErr, "Failed to update status after reconciliation error")
 			}
-			
+
 			// For configuration errors, don't requeue until spec changes
 			if errorType == ConfigurationError {
 				return ctrl.Result{}, nil
 			}
-			
+
 			return ctrl.Result{RequeueAfter: interval}, nil
 		}
 	}
-	
+
 	// Clear retry count on successful reconciliation
 	r.clearRetryCount(&externalSource)
 
@@ -280,7 +280,7 @@ func (r *ExternalSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	log.Info("Reconciliation completed", "requeue_after", interval)
-	
+
 	return ctrl.Result{RequeueAfter: interval}, nil
 }
 
@@ -304,7 +304,7 @@ func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource
 	shouldFetch := true
 	if sourceGenerator.SupportsConditionalFetch() && externalSource.Status.LastHandledETag != "" {
 		r.setProgressCondition(externalSource, FetchingCondition, true, ProgressingReason, "Checking for updates")
-		
+
 		currentETag, err := sourceGenerator.GetLastModified(ctx, *generatorConfig)
 		if err != nil {
 			log.Info("Failed to get last modified, proceeding with full fetch", "error", err)
@@ -319,16 +319,16 @@ func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource
 	if shouldFetch {
 		// Fetch data from source
 		r.setProgressCondition(externalSource, FetchingCondition, true, ProgressingReason, "Fetching data from external source")
-		
+
 		fetchStartTime := time.Now()
 		sourceData, err := sourceGenerator.Generate(ctx, *generatorConfig)
 		fetchDuration := time.Since(fetchStartTime)
-		
+
 		// Record source request metrics
 		if r.MetricsRecorder != nil {
 			r.MetricsRecorder.RecordSourceRequest(externalSource.Spec.Generator.Type, err == nil, fetchDuration)
 		}
-		
+
 		if err != nil {
 			r.setProgressCondition(externalSource, FetchingCondition, false, FailedReason, fmt.Sprintf("Failed to fetch data: %v", err))
 			return ctrl.Result{}, fmt.Errorf("failed to generate source data: %w", err)
@@ -340,27 +340,27 @@ func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource
 		transformedData := sourceData.Data
 		if externalSource.Spec.Transform != nil {
 			r.setProgressCondition(externalSource, TransformingCondition, true, ProgressingReason, "Transforming data")
-			
+
 			transformStartTime := time.Now()
 			transformedData, err = r.Transformer.Transform(ctx, sourceData.Data, externalSource.Spec.Transform.Expression)
 			transformDuration := time.Since(transformStartTime)
-			
+
 			// Record transformation metrics
 			if r.MetricsRecorder != nil {
 				r.MetricsRecorder.RecordTransformation(err == nil, transformDuration)
 			}
-			
+
 			if err != nil {
 				r.setProgressCondition(externalSource, TransformingCondition, false, FailedReason, fmt.Sprintf("Failed to transform data: %v", err))
 				return ctrl.Result{}, fmt.Errorf("failed to transform data: %w", err)
 			}
-			
+
 			r.setProgressCondition(externalSource, TransformingCondition, false, SucceededReason, "Successfully transformed data")
 		}
 
 		// Package and store artifact
 		r.setProgressCondition(externalSource, StoringCondition, true, ProgressingReason, "Packaging and storing artifact")
-		
+
 		destinationPath := externalSource.Spec.DestinationPath
 		if destinationPath == "" {
 			destinationPath = "data"
@@ -370,12 +370,12 @@ func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource
 		packageStartTime := time.Now()
 		packagedArtifact, err := r.ArtifactManager.Package(ctx, transformedData, destinationPath)
 		packageDuration := time.Since(packageStartTime)
-		
+
 		// Record packaging metrics
 		if r.MetricsRecorder != nil {
 			r.MetricsRecorder.RecordArtifactOperation("package", err == nil, packageDuration)
 		}
-		
+
 		if err != nil {
 			r.setProgressCondition(externalSource, StoringCondition, false, FailedReason, fmt.Sprintf("Failed to package artifact: %v", err))
 			return ctrl.Result{}, fmt.Errorf("failed to package artifact: %w", err)
@@ -386,12 +386,12 @@ func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource
 		storeStartTime := time.Now()
 		artifactURL, err := r.ArtifactManager.Store(ctx, packagedArtifact, sourceKey)
 		storeDuration := time.Since(storeStartTime)
-		
+
 		// Record storage metrics
 		if r.MetricsRecorder != nil {
 			r.MetricsRecorder.RecordArtifactOperation("store", err == nil, storeDuration)
 		}
-		
+
 		if err != nil {
 			r.setProgressCondition(externalSource, StoringCondition, false, FailedReason, fmt.Sprintf("Failed to store artifact: %v", err))
 			return ctrl.Result{}, fmt.Errorf("failed to store artifact: %w", err)
@@ -452,19 +452,19 @@ func (r *ExternalSourceReconciler) createGeneratorConfig(externalSource *sourcev
 
 		httpSpec := externalSource.Spec.Generator.HTTP
 		config.Config["url"] = httpSpec.URL
-		
+
 		if httpSpec.Method != "" {
 			config.Config["method"] = httpSpec.Method
 		}
-		
+
 		if httpSpec.InsecureSkipVerify {
 			config.Config["insecureSkipVerify"] = true
 		}
-		
+
 		if httpSpec.HeadersSecretRef != nil && httpSpec.HeadersSecretRef.Name != "" {
 			config.Config["headersSecretName"] = httpSpec.HeadersSecretRef.Name
 		}
-		
+
 		if httpSpec.CABundleSecretRef != nil && httpSpec.CABundleSecretRef.Name != "" {
 			config.Config["caBundleSecretName"] = httpSpec.CABundleSecretRef.Name
 			if httpSpec.CABundleSecretRef.Key != "" {
@@ -498,8 +498,8 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 		return fmt.Errorf("failed to get ExternalArtifact: %w", err)
 	}
 
-	// Create new ExternalArtifact if it doesn't exist
-	if client.IgnoreNotFound(err) != nil {
+	// Create new ExternalArtifact if it doesn't exist (when err is NotFound)
+	if err != nil && client.IgnoreNotFound(err) == nil {
 		newArtifact := &sourcev1alpha1.ExternalArtifact{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      artifactName,
@@ -642,9 +642,9 @@ func (r *ExternalSourceReconciler) classifyError(err error) ErrorType {
 	if err == nil {
 		return TransientError // Should not happen, but safe default
 	}
-	
+
 	errStr := err.Error()
-	
+
 	// Configuration errors - don't retry until spec changes
 	configErrors := []string{
 		"invalid interval",
@@ -653,13 +653,13 @@ func (r *ExternalSourceReconciler) classifyError(err error) ErrorType {
 		"invalid URL",
 		"invalid CEL expression",
 	}
-	
+
 	for _, configErr := range configErrors {
 		if contains(errStr, configErr) {
 			return ConfigurationError
 		}
 	}
-	
+
 	// Permanent errors - don't retry
 	permanentErrors := []string{
 		"404",
@@ -669,25 +669,25 @@ func (r *ExternalSourceReconciler) classifyError(err error) ErrorType {
 		"unauthorized",
 		"forbidden",
 	}
-	
+
 	for _, permErr := range permanentErrors {
 		if contains(errStr, permErr) {
 			return PermanentError
 		}
 	}
-	
+
 	// Default to transient for network errors, timeouts, etc.
 	return TransientError
 }
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    len(s) > len(substr) && 
-		    (s[:len(substr)] == substr || 
-		     s[len(s)-len(substr):] == substr || 
-		     findSubstring(s, substr)))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					findSubstring(s, substr)))
 }
 
 // findSubstring performs a simple substring search
@@ -704,26 +704,26 @@ func findSubstring(s, substr string) bool {
 func (r *ExternalSourceReconciler) calculateRetryDelay(externalSource *sourcev1alpha1.ExternalSource, err error) time.Duration {
 	// Classify the error
 	errorType := r.classifyError(err)
-	
+
 	// Don't retry configuration or permanent errors
 	if errorType == ConfigurationError || errorType == PermanentError {
 		return 0
 	}
-	
+
 	retryCount := r.getRetryCount(externalSource)
-	
+
 	if retryCount >= maxRetryAttempts {
 		return 0 // No more retries
 	}
-	
+
 	// Exponential backoff: baseDelay * 2^retryCount
 	delay := time.Duration(float64(baseRetryDelay) * math.Pow(2, float64(retryCount)))
-	
+
 	// Cap at maximum delay
 	if delay > maxRetryDelay {
 		delay = maxRetryDelay
 	}
-	
+
 	// Add jitter to prevent thundering herd
 	// Use a deterministic seed based on the resource to ensure consistent jitter
 	seed := int64(0)
@@ -731,15 +731,15 @@ func (r *ExternalSourceReconciler) calculateRetryDelay(externalSource *sourcev1a
 		seed = seed*31 + int64(b)
 	}
 	rng := rand.New(rand.NewSource(seed + int64(retryCount)))
-	
+
 	jitter := time.Duration(float64(delay) * jitterFactor * (2*rng.Float64() - 1))
 	delay += jitter
-	
+
 	// Ensure minimum delay
 	if delay < baseRetryDelay {
 		delay = baseRetryDelay
 	}
-	
+
 	return delay
 }
 
@@ -748,17 +748,17 @@ func (r *ExternalSourceReconciler) getRetryCount(externalSource *sourcev1alpha1.
 	if externalSource.Annotations == nil {
 		return 0
 	}
-	
+
 	retryCountStr, exists := externalSource.Annotations[retryCountAnnotation]
 	if !exists {
 		return 0
 	}
-	
+
 	var retryCount int
 	if _, err := fmt.Sscanf(retryCountStr, "%d", &retryCount); err != nil {
 		return 0
 	}
-	
+
 	return retryCount
 }
 
@@ -767,13 +767,13 @@ func (r *ExternalSourceReconciler) incrementRetryCount(externalSource *sourcev1a
 	if externalSource.Annotations == nil {
 		externalSource.Annotations = make(map[string]string)
 	}
-	
+
 	retryCount := r.getRetryCount(externalSource)
 	newRetryCount := retryCount + 1
-	
+
 	externalSource.Annotations[retryCountAnnotation] = fmt.Sprintf("%d", newRetryCount)
 	externalSource.Annotations[lastFailureAnnotation] = err.Error()
-	
+
 	// Set backoff start time on first failure
 	if retryCount == 0 {
 		externalSource.Annotations[backoffStartAnnotation] = time.Now().Format(time.RFC3339)
@@ -786,7 +786,7 @@ func (r *ExternalSourceReconciler) clearRetryCount(externalSource *sourcev1alpha
 		delete(externalSource.Annotations, retryCountAnnotation)
 		delete(externalSource.Annotations, lastFailureAnnotation)
 		delete(externalSource.Annotations, backoffStartAnnotation)
-		
+
 		// Remove stalled condition if it exists
 		apimeta.RemoveStatusCondition(&externalSource.Status.Conditions, StalledCondition)
 	}
@@ -797,17 +797,17 @@ func (r *ExternalSourceReconciler) getBackoffDuration(externalSource *sourcev1al
 	if externalSource.Annotations == nil {
 		return 0
 	}
-	
+
 	backoffStartStr, exists := externalSource.Annotations[backoffStartAnnotation]
 	if !exists {
 		return 0
 	}
-	
+
 	backoffStart, err := time.Parse(time.RFC3339, backoffStartStr)
 	if err != nil {
 		return 0
 	}
-	
+
 	return time.Since(backoffStart)
 }
 
@@ -822,13 +822,13 @@ func mapsEqual(a, b map[string]string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	
+
 	for k, v := range a {
 		if b[k] != v {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -836,51 +836,51 @@ func mapsEqual(a, b map[string]string) bool {
 func (r *ExternalSourceReconciler) needsRecovery(externalSource *sourcev1alpha1.ExternalSource) bool {
 	// Check if there are any in-progress conditions that suggest the controller was interrupted
 	inProgressConditions := []string{FetchingCondition, TransformingCondition, StoringCondition}
-	
+
 	for _, conditionType := range inProgressConditions {
 		if r.hasCondition(externalSource, conditionType, metav1.ConditionTrue) {
 			return true
 		}
 	}
-	
+
 	// Check if there's a stalled condition that might need recovery
 	if r.hasCondition(externalSource, StalledCondition, metav1.ConditionTrue) {
 		// If we have a successful artifact but are marked as stalled, we might need recovery
 		return externalSource.Status.Artifact != nil
 	}
-	
+
 	return false
 }
 
 // performRecovery handles controller restart recovery
 func (r *ExternalSourceReconciler) performRecovery(ctx context.Context, externalSource *sourcev1alpha1.ExternalSource) {
 	log := logf.FromContext(ctx)
-	
+
 	// Clear any in-progress conditions from before the restart
 	r.clearProgressConditions(externalSource)
-	
+
 	// If we have a last successful artifact, ensure the ExternalArtifact child resource exists
 	if externalSource.Status.Artifact != nil {
 		artifact := externalSource.Status.Artifact
-		log.Info("Recovering with last successful artifact", 
+		log.Info("Recovering with last successful artifact",
 			"url", artifact.URL, "revision", artifact.Revision)
-		
+
 		// Ensure ExternalArtifact child resource is properly created/updated
-		if err := r.reconcileExternalArtifact(ctx, externalSource, 
+		if err := r.reconcileExternalArtifact(ctx, externalSource,
 			artifact.URL, artifact.Revision, artifact.Metadata); err != nil {
 			log.Error(err, "Failed to recover ExternalArtifact during controller restart")
 		}
-		
+
 		// Set ready condition to indicate we have a working artifact
-		r.setReadyCondition(externalSource, metav1.ConditionTrue, SucceededReason, 
+		r.setReadyCondition(externalSource, metav1.ConditionTrue, SucceededReason,
 			"Recovered from controller restart with last successful artifact")
 	} else {
 		// No previous artifact, start fresh
 		log.Info("No previous artifact found, starting fresh reconciliation")
-		r.setReadyCondition(externalSource, metav1.ConditionFalse, ProgressingReason, 
+		r.setReadyCondition(externalSource, metav1.ConditionFalse, ProgressingReason,
 			"Starting fresh reconciliation after controller restart")
 	}
-	
+
 	// Clear any stalled condition since we're actively recovering
 	apimeta.RemoveStatusCondition(&externalSource.Status.Conditions, StalledCondition)
 }
@@ -890,13 +890,13 @@ func (r *ExternalSourceReconciler) validateArtifactIntegrity(ctx context.Context
 	if externalSource.Status.Artifact == nil {
 		return false
 	}
-	
+
 	// For now, we assume the artifact is valid if it exists in status
 	// In a more sophisticated implementation, we could:
 	// 1. Check if the artifact URL is still accessible
 	// 2. Verify the artifact checksum
 	// 3. Validate the ExternalArtifact child resource exists
-	
+
 	return true
 }
 

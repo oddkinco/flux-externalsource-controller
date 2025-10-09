@@ -85,9 +85,9 @@ func TestMemoryBackend_List(t *testing.T) {
 
 	// Store test data
 	testData := map[string][]byte{
-		"artifacts/file1.tar.gz":     []byte("data1"),
-		"artifacts/file2.tar.gz":     []byte("data2"),
-		"configs/config.json":        []byte("config"),
+		"artifacts/file1.tar.gz":        []byte("data1"),
+		"artifacts/file2.tar.gz":        []byte("data2"),
+		"configs/config.json":           []byte("config"),
 		"artifacts/nested/file3.tar.gz": []byte("data3"),
 	}
 
@@ -125,7 +125,7 @@ func TestMemoryBackend_List(t *testing.T) {
 			expected: []string{},
 		},
 		{
-			name: "list all with empty prefix",
+			name:   "list all with empty prefix",
 			prefix: "",
 			expected: []string{
 				"artifacts/file1.tar.gz",

@@ -37,7 +37,7 @@ import (
 
 // HTTPGenerator implements SourceGenerator for HTTP sources
 type HTTPGenerator struct {
-	client    client.Client
+	client     client.Client
 	httpClient *http.Client
 }
 
@@ -207,7 +207,7 @@ func (h *HTTPGenerator) parseConfig(ctx context.Context, config map[string]inter
 		if caBundleKey == "" {
 			caBundleKey = "ca.crt"
 		}
-		
+
 		caBundle, err := h.loadSecretData(ctx, namespace, caBundleSecretName, caBundleKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load CA bundle from secret: %w", err)

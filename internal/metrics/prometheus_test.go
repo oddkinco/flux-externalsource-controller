@@ -33,7 +33,7 @@ import (
 func TestPrometheusRecorder_RecordReconciliation(t *testing.T) {
 	// Create a new registry for this test to avoid conflicts
 	registry := prometheus.NewRegistry()
-	
+
 	recorder := &PrometheusRecorder{
 		reconciliationTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -51,7 +51,7 @@ func TestPrometheusRecorder_RecordReconciliation(t *testing.T) {
 			[]string{"namespace", "name", "source_type", "success"},
 		),
 	}
-	
+
 	registry.MustRegister(recorder.reconciliationTotal, recorder.reconciliationDuration)
 
 	tests := []struct {
@@ -105,7 +105,7 @@ func TestPrometheusRecorder_RecordReconciliation(t *testing.T) {
 
 func TestPrometheusRecorder_RecordSourceRequest(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	
+
 	recorder := &PrometheusRecorder{
 		sourceRequestTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -123,7 +123,7 @@ func TestPrometheusRecorder_RecordSourceRequest(t *testing.T) {
 			[]string{"source_type", "success"},
 		),
 	}
-	
+
 	registry.MustRegister(recorder.sourceRequestTotal, recorder.sourceRequestDuration)
 
 	tests := []struct {
@@ -168,7 +168,7 @@ func TestPrometheusRecorder_RecordSourceRequest(t *testing.T) {
 
 func TestPrometheusRecorder_RecordTransformation(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	
+
 	recorder := &PrometheusRecorder{
 		transformationTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -185,7 +185,7 @@ func TestPrometheusRecorder_RecordTransformation(t *testing.T) {
 			},
 		),
 	}
-	
+
 	registry.MustRegister(recorder.transformationTotal, recorder.transformationDuration)
 
 	tests := []struct {
@@ -227,7 +227,7 @@ func TestPrometheusRecorder_RecordTransformation(t *testing.T) {
 
 func TestPrometheusRecorder_RecordArtifactOperation(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	
+
 	recorder := &PrometheusRecorder{
 		artifactOperationTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -245,7 +245,7 @@ func TestPrometheusRecorder_RecordArtifactOperation(t *testing.T) {
 			[]string{"operation", "success"},
 		),
 	}
-	
+
 	registry.MustRegister(recorder.artifactOperationTotal, recorder.artifactOperationDuration)
 
 	tests := []struct {
@@ -296,7 +296,7 @@ func TestPrometheusRecorder_RecordArtifactOperation(t *testing.T) {
 
 func TestPrometheusRecorder_ActiveReconciliations(t *testing.T) {
 	registry := prometheus.NewRegistry()
-	
+
 	recorder := &PrometheusRecorder{
 		activeReconciliations: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -306,7 +306,7 @@ func TestPrometheusRecorder_ActiveReconciliations(t *testing.T) {
 			[]string{"namespace", "name"},
 		),
 	}
-	
+
 	registry.MustRegister(recorder.activeReconciliations)
 
 	namespace := "default"
@@ -392,7 +392,7 @@ func TestNewPrometheusRecorder(t *testing.T) {
 func TestPrometheusRecorder_MetricNames(t *testing.T) {
 	// Create a separate registry for this test to avoid conflicts
 	registry := prometheus.NewRegistry()
-	
+
 	recorder := &PrometheusRecorder{
 		reconciliationTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -410,12 +410,12 @@ func TestPrometheusRecorder_MetricNames(t *testing.T) {
 			[]string{"namespace", "name", "source_type", "success"},
 		),
 	}
-	
+
 	registry.MustRegister(recorder.reconciliationTotal, recorder.reconciliationDuration)
 
 	// Record some metrics to ensure they work
 	recorder.RecordReconciliation("test", "test", "http", true, time.Millisecond)
-	
+
 	// Verify we can gather metrics after recording
 	metricFamilies, err := registry.Gather()
 	if err != nil {

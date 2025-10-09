@@ -192,7 +192,7 @@ func (s *S3Backend) buildObjectURL(key string) string {
 
 	// Clean the key to ensure proper path
 	cleanKey := strings.TrimPrefix(key, "/")
-	
+
 	return fmt.Sprintf("%s://%s/%s/%s", scheme, s.endpoint, s.bucket, cleanKey)
 }
 
@@ -204,7 +204,7 @@ func (s *S3Backend) buildListURL(prefix string) string {
 	}
 
 	baseURL := fmt.Sprintf("%s://%s/%s", scheme, s.endpoint, s.bucket)
-	
+
 	// Add query parameters for listing
 	params := url.Values{}
 	if prefix != "" {
@@ -221,7 +221,7 @@ func (s *S3Backend) buildListURL(prefix string) string {
 // parseListResponse parses the S3 list response (simplified implementation)
 func (s *S3Backend) parseListResponse(body, prefix string) []string {
 	var keys []string
-	
+
 	// This is a very simplified parser - in production, use proper XML parsing
 	// Look for <Key> tags in the XML response
 	lines := strings.Split(body, "\n")
@@ -235,6 +235,6 @@ func (s *S3Backend) parseListResponse(body, prefix string) []string {
 			}
 		}
 	}
-	
+
 	return keys
 }

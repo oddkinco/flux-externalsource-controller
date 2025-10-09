@@ -43,14 +43,14 @@ func NewMemoryBackend() *MemoryBackend {
 	backend := &MemoryBackend{
 		data: make(map[string][]byte),
 	}
-	
+
 	// Issue warning about non-persistence
 	if !backend.warned {
 		log.Println("WARNING: Using in-memory storage backend. Artifacts will NOT persist across controller restarts.")
 		log.Println("WARNING: This backend is intended for development and testing only.")
 		backend.warned = true
 	}
-	
+
 	return backend
 }
 
@@ -58,13 +58,13 @@ func NewMemoryBackend() *MemoryBackend {
 func (m *MemoryBackend) Store(ctx context.Context, key string, data []byte) (string, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	
+
 	// Store a copy of the data to prevent external modifications
 	dataCopy := make([]byte, len(data))
 	copy(dataCopy, data)
-	
+
 	m.data[key] = dataCopy
-	
+
 	// Return a mock URL for the stored object
 	url := fmt.Sprintf("memory://localhost/%s", key)
 	return url, nil
@@ -74,14 +74,14 @@ func (m *MemoryBackend) Store(ctx context.Context, key string, data []byte) (str
 func (m *MemoryBackend) List(ctx context.Context, prefix string) ([]string, error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
-	
+
 	var keys []string
 	for key := range m.data {
 		if strings.HasPrefix(key, prefix) {
 			keys = append(keys, key)
 		}
 	}
-	
+
 	return keys, nil
 }
 
@@ -89,7 +89,7 @@ func (m *MemoryBackend) List(ctx context.Context, prefix string) ([]string, erro
 func (m *MemoryBackend) Delete(ctx context.Context, key string) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	
+
 	delete(m.data, key)
 	return nil
 }
@@ -104,12 +104,12 @@ func (m *MemoryBackend) GetURL(key string) string {
 func (m *MemoryBackend) GetData(key string) ([]byte, bool) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
-	
+
 	data, exists := m.data[key]
 	if !exists {
 		return nil, false
 	}
-	
+
 	// Return a copy to prevent external modifications
 	dataCopy := make([]byte, len(data))
 	copy(dataCopy, data)
@@ -120,7 +120,7 @@ func (m *MemoryBackend) GetData(key string) ([]byte, bool) {
 func (m *MemoryBackend) Size() int {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
-	
+
 	return len(m.data)
 }
 
@@ -128,6 +128,6 @@ func (m *MemoryBackend) Size() int {
 func (m *MemoryBackend) Clear() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	
+
 	m.data = make(map[string][]byte)
 }

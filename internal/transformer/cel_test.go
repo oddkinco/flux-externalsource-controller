@@ -160,7 +160,7 @@ var _ = Describe("CELTransformer", func() {
 
 				result, err := transformer.Transform(ctx, input, expression)
 				Expect(err).ToNot(HaveOccurred())
-				
+
 				var resultFloat float64
 				err = json.Unmarshal(result, &resultFloat)
 				Expect(err).ToNot(HaveOccurred())
@@ -211,7 +211,7 @@ var _ = Describe("CELTransformer", func() {
 		It("should timeout for malicious infinite loop expressions", func() {
 			transformer = NewCELTransformer(100 * time.Millisecond) // Very short timeout
 			input := []byte(`{"items": [1, 2, 3]}`)
-			
+
 			// This expression should be complex enough to potentially timeout
 			// Note: CEL has built-in protections, so we simulate with a complex operation
 			expression := `input.items.map(x, input.items.map(y, input.items.map(z, x + y + z)))`
@@ -223,7 +223,7 @@ var _ = Describe("CELTransformer", func() {
 			// The operation should complete quickly due to CEL's built-in protections
 			// but we test that our timeout mechanism is in place
 			Expect(duration).To(BeNumerically("<", 2*time.Second))
-			
+
 			// If it does timeout, we should get the appropriate error
 			if err != nil && strings.Contains(err.Error(), "timed out") {
 				Expect(err.Error()).To(ContainSubstring("CEL expression execution timed out"))
@@ -239,7 +239,7 @@ var _ = Describe("CELTransformer", func() {
 			cancel()
 
 			_, err := transformer.Transform(cancelCtx, input, expression)
-			
+
 			// Should either succeed quickly or fail due to context cancellation
 			if err != nil {
 				Expect(err.Error()).To(SatisfyAny(
@@ -297,11 +297,11 @@ var _ = Describe("CELTransformer", func() {
 			var resultMap map[string]interface{}
 			err = json.Unmarshal(result, &resultMap)
 			Expect(err).ToNot(HaveOccurred())
-			
+
 			activeUsers := resultMap["activeUsers"].([]interface{})
 			Expect(activeUsers).To(HaveLen(2))
 			Expect(activeUsers).To(ContainElements("Alice", "Charlie"))
-			
+
 			totalUsers := resultMap["totalUsers"].(float64)
 			Expect(totalUsers).To(Equal(3.0))
 		})

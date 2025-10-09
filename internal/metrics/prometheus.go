@@ -31,15 +31,15 @@ import (
 
 // PrometheusRecorder implements MetricsRecorder using Prometheus metrics
 type PrometheusRecorder struct {
-	reconciliationTotal     *prometheus.CounterVec
-	reconciliationDuration  *prometheus.HistogramVec
-	sourceRequestTotal      *prometheus.CounterVec
-	sourceRequestDuration   *prometheus.HistogramVec
-	transformationTotal     *prometheus.CounterVec
-	transformationDuration  prometheus.Histogram
-	artifactOperationTotal  *prometheus.CounterVec
+	reconciliationTotal       *prometheus.CounterVec
+	reconciliationDuration    *prometheus.HistogramVec
+	sourceRequestTotal        *prometheus.CounterVec
+	sourceRequestDuration     *prometheus.HistogramVec
+	transformationTotal       *prometheus.CounterVec
+	transformationDuration    prometheus.Histogram
+	artifactOperationTotal    *prometheus.CounterVec
 	artifactOperationDuration *prometheus.HistogramVec
-	activeReconciliations   *prometheus.GaugeVec
+	activeReconciliations     *prometheus.GaugeVec
 }
 
 // NewPrometheusRecorder creates a new PrometheusRecorder and registers metrics

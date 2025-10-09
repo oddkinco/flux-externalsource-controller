@@ -100,7 +100,7 @@ func (m *Manager) Cleanup(ctx context.Context, source string, keepRevision strin
 	// Delete all artifacts except the one we want to keep
 	keepKey := fmt.Sprintf("artifacts/%s/%s.tar.gz", source, keepRevision)
 	var cleanupErrors []error
-	
+
 	for _, key := range keys {
 		if key != keepKey {
 			if err := m.storage.Delete(ctx, key); err != nil {

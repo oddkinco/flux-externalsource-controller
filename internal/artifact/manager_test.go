@@ -78,10 +78,10 @@ func TestManager_Package(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:        "invalid path with absolute path",
-			data:        []byte("absolute data"),
-			path:        "/etc/config.json",
-			expectError: false,
+			name:         "invalid path with absolute path",
+			data:         []byte("absolute data"),
+			path:         "/etc/config.json",
+			expectError:  false,
 			expectedPath: "etc/config.json", // Leading slash should be stripped
 		},
 	}
