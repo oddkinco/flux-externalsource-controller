@@ -75,23 +75,23 @@
     - Mock storage backends for testing different scenarios
     - _Requirements: 5.1, 5.2, 5.5, 9.1_
 
-- [ ] 6. Implement core reconciliation logic
-  - [ ] 6.1 Create reconciler with source generator integration
+- [x] 6. Implement core reconciliation logic
+  - [x] 6.1 Create reconciler with source generator integration
     - Implement reconciliation loop using factory to create appropriate generators
     - Add conditional fetching logic with ETag optimization for HTTP sources
     - _Requirements: 3.1, 3.2, 3.3, 2.1_
   
-  - [ ] 6.2 Add transformation and artifact creation workflow
+  - [x] 6.2 Add transformation and artifact creation workflow
     - Integrate transformer and artifact manager into reconciliation flow
     - Implement proper error handling and status condition updates
     - _Requirements: 4.1, 5.1, 7.1, 8.5_
   
-  - [ ] 6.3 Implement ExternalArtifact child resource management
+  - [x] 6.3 Implement ExternalArtifact child resource management
     - Create and update ExternalArtifact resources with proper ownership
     - Handle cleanup when ExternalSource is deleted
     - _Requirements: 6.1, 6.2, 6.3, 6.5_
   
-  - [ ] 6.4 Write integration tests for reconciliation
+  - [x] 6.4 Write integration tests for reconciliation
     - Test complete reconciliation flow with mocked external dependencies
     - Verify error handling and retry logic with exponential backoff
     - _Requirements: 3.1, 8.1, 8.2_
