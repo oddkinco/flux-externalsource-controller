@@ -111,10 +111,10 @@ func TestFactory_SupportedTypes(t *testing.T) {
 	}
 
 	// Register generators
-	factory.RegisterGenerator("mock1", func() SourceGenerator {
+	_ = factory.RegisterGenerator("mock1", func() SourceGenerator {
 		return &mockGenerator{name: "mock1"}
 	})
-	factory.RegisterGenerator("mock2", func() SourceGenerator {
+	_ = factory.RegisterGenerator("mock2", func() SourceGenerator {
 		return &mockGenerator{name: "mock2"}
 	})
 
@@ -142,7 +142,7 @@ func TestFactory_ConcurrentAccess(t *testing.T) {
 	// Goroutine 1: Register generators
 	go func() {
 		for i := 0; i < 10; i++ {
-			factory.RegisterGenerator("concurrent1", func() SourceGenerator {
+			_ = factory.RegisterGenerator("concurrent1", func() SourceGenerator {
 				return &mockGenerator{name: "concurrent1"}
 			})
 		}
@@ -151,11 +151,11 @@ func TestFactory_ConcurrentAccess(t *testing.T) {
 
 	// Goroutine 2: Create generators
 	go func() {
-		factory.RegisterGenerator("concurrent2", func() SourceGenerator {
+		_ = factory.RegisterGenerator("concurrent2", func() SourceGenerator {
 			return &mockGenerator{name: "concurrent2"}
 		})
 		for i := 0; i < 10; i++ {
-			factory.CreateGenerator("concurrent2")
+			_, _ = factory.CreateGenerator("concurrent2")
 		}
 		done <- true
 	}()

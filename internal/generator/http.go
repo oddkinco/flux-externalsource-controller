@@ -39,6 +39,7 @@ import (
 type HTTPGenerator struct {
 	client     client.Client
 	httpClient *http.Client
+	userAgent  string
 }
 
 // HTTPConfig holds HTTP-specific configuration
@@ -48,16 +49,47 @@ type HTTPConfig struct {
 	Headers            map[string]string `json:"headers"`
 	CABundle           []byte            `json:"caBundle"`
 	InsecureSkipVerify bool              `json:"insecureSkipVerify"`
-	Timeout            time.Duration     `json:"timeout"`
 }
 
-// NewHTTPGenerator creates a new HTTP generator
-func NewHTTPGenerator(client client.Client) *HTTPGenerator {
+// HTTPClientConfig holds HTTP client configuration
+type HTTPClientConfig struct {
+	Timeout             time.Duration
+	MaxIdleConns        int
+	MaxIdleConnsPerHost int
+	MaxConnsPerHost     int
+	IdleConnTimeout     time.Duration
+	UserAgent           string
+}
+
+// NewHTTPGenerator creates a new HTTP generator with default configuration
+func NewHTTPGenerator(k8sClient client.Client) *HTTPGenerator {
 	return &HTTPGenerator{
-		client: client,
+		client: k8sClient,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		userAgent: "externalsource-controller/1.0",
+	}
+}
+
+// NewHTTPGeneratorWithConfig creates a new HTTP generator with custom configuration
+func NewHTTPGeneratorWithConfig(k8sClient client.Client, config *HTTPClientConfig) *HTTPGenerator {
+	transport := &http.Transport{
+		MaxIdleConns:        config.MaxIdleConns,
+		MaxIdleConnsPerHost: config.MaxIdleConnsPerHost,
+		MaxConnsPerHost:     config.MaxConnsPerHost,
+		IdleConnTimeout:     config.IdleConnTimeout,
+	}
+
+	httpClient := &http.Client{
+		Timeout:   config.Timeout,
+		Transport: transport,
+	}
+
+	return &HTTPGenerator{
+		client:     k8sClient,
+		httpClient: httpClient,
+		userAgent:  config.UserAgent,
 	}
 }
 
@@ -69,7 +101,7 @@ func (h *HTTPGenerator) Generate(ctx context.Context, config GeneratorConfig) (*
 	}
 
 	// Configure HTTP client with TLS settings
-	client, err := h.configureHTTPClient(ctx, httpConfig)
+	httpClient, err := h.configureHTTPClient(ctx, httpConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure HTTP client: %w", err)
 	}
@@ -80,17 +112,26 @@ func (h *HTTPGenerator) Generate(ctx context.Context, config GeneratorConfig) (*
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
+	// Add User-Agent header
+	if h.userAgent != "" {
+		req.Header.Set("User-Agent", h.userAgent)
+	}
+
 	// Add headers
 	for key, value := range httpConfig.Headers {
 		req.Header.Set(key, value)
 	}
 
 	// Execute request
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail HTTP operations due to close errors
+			// Log error but don't fail the operation
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, resp.Status)
@@ -129,7 +170,7 @@ func (h *HTTPGenerator) GetLastModified(ctx context.Context, config GeneratorCon
 	}
 
 	// Configure HTTP client with TLS settings
-	client, err := h.configureHTTPClient(ctx, httpConfig)
+	httpClient, err := h.configureHTTPClient(ctx, httpConfig)
 	if err != nil {
 		return "", fmt.Errorf("failed to configure HTTP client: %w", err)
 	}
@@ -140,17 +181,26 @@ func (h *HTTPGenerator) GetLastModified(ctx context.Context, config GeneratorCon
 		return "", fmt.Errorf("failed to create HEAD request: %w", err)
 	}
 
+	// Add User-Agent header
+	if h.userAgent != "" {
+		req.Header.Set("User-Agent", h.userAgent)
+	}
+
 	// Add headers
 	for key, value := range httpConfig.Headers {
 		req.Header.Set(key, value)
 	}
 
 	// Execute request
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("HEAD request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail HTTP operations due to close errors
+			// Log error but don't fail the operation
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("HEAD request failed with status %d: %s", resp.StatusCode, resp.Status)
@@ -164,7 +214,6 @@ func (h *HTTPGenerator) parseConfig(ctx context.Context, config map[string]inter
 	httpConfig := &HTTPConfig{
 		Method:  "GET",
 		Headers: make(map[string]string),
-		Timeout: 30 * time.Second,
 	}
 
 	// Parse URL
@@ -219,6 +268,8 @@ func (h *HTTPGenerator) parseConfig(ctx context.Context, config map[string]inter
 }
 
 // configureHTTPClient creates an HTTP client with appropriate TLS configuration
+//
+//nolint:unparam // ctx parameter reserved for future use (e.g., timeout handling, tracing)
 func (h *HTTPGenerator) configureHTTPClient(ctx context.Context, config *HTTPConfig) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
@@ -237,7 +288,7 @@ func (h *HTTPGenerator) configureHTTPClient(ctx context.Context, config *HTTPCon
 
 	return &http.Client{
 		Transport: transport,
-		Timeout:   config.Timeout,
+		Timeout:   h.httpClient.Timeout, // Use the configured timeout from the generator
 	}, nil
 }
 

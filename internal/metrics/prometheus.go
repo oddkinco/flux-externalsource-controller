@@ -29,6 +29,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
+const (
+	successTrue  = "true"
+	successFalse = "false"
+)
+
 // PrometheusRecorder implements MetricsRecorder using Prometheus metrics
 type PrometheusRecorder struct {
 	reconciliationTotal       *prometheus.CounterVec
@@ -131,9 +136,9 @@ func NewPrometheusRecorder() *PrometheusRecorder {
 
 // RecordReconciliation records a reconciliation attempt with its outcome
 func (r *PrometheusRecorder) RecordReconciliation(namespace, name, sourceType string, success bool, duration time.Duration) {
-	successLabel := "false"
+	successLabel := successFalse
 	if success {
-		successLabel = "true"
+		successLabel = successTrue
 	}
 
 	r.reconciliationTotal.WithLabelValues(namespace, name, sourceType, successLabel).Inc()
@@ -142,9 +147,9 @@ func (r *PrometheusRecorder) RecordReconciliation(namespace, name, sourceType st
 
 // RecordSourceRequest records a request to an external source
 func (r *PrometheusRecorder) RecordSourceRequest(sourceType string, success bool, duration time.Duration) {
-	successLabel := "false"
+	successLabel := successFalse
 	if success {
-		successLabel = "true"
+		successLabel = successTrue
 	}
 
 	r.sourceRequestTotal.WithLabelValues(sourceType, successLabel).Inc()
@@ -153,9 +158,9 @@ func (r *PrometheusRecorder) RecordSourceRequest(sourceType string, success bool
 
 // RecordTransformation records a data transformation attempt
 func (r *PrometheusRecorder) RecordTransformation(success bool, duration time.Duration) {
-	successLabel := "false"
+	successLabel := successFalse
 	if success {
-		successLabel = "true"
+		successLabel = successTrue
 	}
 
 	r.transformationTotal.WithLabelValues(successLabel).Inc()
@@ -164,9 +169,9 @@ func (r *PrometheusRecorder) RecordTransformation(success bool, duration time.Du
 
 // RecordArtifactOperation records an artifact storage operation
 func (r *PrometheusRecorder) RecordArtifactOperation(operation string, success bool, duration time.Duration) {
-	successLabel := "false"
+	successLabel := successFalse
 	if success {
-		successLabel = "true"
+		successLabel = successTrue
 	}
 
 	r.artifactOperationTotal.WithLabelValues(operation, successLabel).Inc()

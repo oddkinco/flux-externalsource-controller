@@ -111,7 +111,7 @@ var _ = Describe("CELTransformer", func() {
 				err = json.Unmarshal(result, &resultMap)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(resultMap["username"]).To(Equal("Alice"))
-				Expect(resultMap["isAdmin"]).To(Equal(true))
+				Expect(resultMap["isAdmin"]).To(BeTrue())
 			})
 		})
 

@@ -128,18 +128,18 @@
     - Verify graceful degradation and recovery behavior
     - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 9. Add configuration and deployment setup
-  - [ ] 9.1 Create controller configuration system
+- [x] 9. Add configuration and deployment setup
+  - [x] 9.1 Create controller configuration system
     - Implement configuration for storage backends, timeouts, and retry limits
     - Add environment variable and ConfigMap support for configuration
     - _Requirements: 9.1, 9.4_
   
-  - [ ] 9.2 Create Kubernetes deployment manifests
+  - [x] 9.2 Create Kubernetes deployment manifests
     - Generate RBAC, Deployment, and Service manifests
     - Configure proper resource limits and security contexts
     - _Requirements: 10.1, 10.4_
   
-  - [ ] 9.3 Write end-to-end tests
+  - [x] 9.3 Write end-to-end tests
     - Test complete workflow with real Kubernetes cluster using envtest
     - Verify integration with Flux ExternalArtifact consumption
     - _Requirements: 6.4, 10.1_
@@ -154,3 +154,15 @@
     - Document how to add new source generator types
     - Provide examples of implementing custom generators
     - _Requirements: 2.1, 2.2, 2.5_
+  
+  - [ ] 10.3 Add Docker Compose-based integration testing environment
+    - Use docker k0s image to run a minimal kubernetes cluster
+    - Bootstrap Flux on the cluster with "flux install
+    - Install a simple webserver on the cluster that can respond to HTTP requests
+    - Deploy fx-controller to the cluster in the flux-system namespace
+    - Install sample ExternalSource resources
+    - Verify that ExternalArtifact resources are created, and can be retrieved
+
+  - [ ] 10.4 Create github workflows for deployment artifacts for tagged releases
+    - Create a helm chart for deploying fx-controller
+    - Add github workflows that build tagged docker and helm releases and push to ghcr.io package repositories

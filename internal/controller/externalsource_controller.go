@@ -39,8 +39,10 @@ import (
 
 	sourcev1alpha1 "github.com/example/externalsource-controller/api/v1alpha1"
 	"github.com/example/externalsource-controller/internal/artifact"
+	"github.com/example/externalsource-controller/internal/config"
 	"github.com/example/externalsource-controller/internal/generator"
 	"github.com/example/externalsource-controller/internal/metrics"
+	"github.com/example/externalsource-controller/internal/storage"
 	"github.com/example/externalsource-controller/internal/transformer"
 )
 
@@ -52,17 +54,12 @@ type ExternalSourceReconciler struct {
 	Transformer      transformer.Transformer
 	ArtifactManager  artifact.ArtifactManager
 	MetricsRecorder  metrics.MetricsRecorder
+	Config           *config.Config
 }
 
 const (
 	// ExternalSourceFinalizer is the finalizer used by the ExternalSource controller
 	ExternalSourceFinalizer = "source.example.com/externalsource-finalizer"
-
-	// Retry configuration
-	maxRetryAttempts = 10
-	baseRetryDelay   = 1 * time.Second
-	maxRetryDelay    = 5 * time.Minute
-	jitterFactor     = 0.25 // ±25% jitter
 
 	// Annotation keys for retry tracking
 	retryCountAnnotation   = "source.example.com/retry-count"
@@ -230,7 +227,7 @@ func (r *ExternalSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 			r.setReadyCondition(&externalSource, metav1.ConditionFalse, FailedReason,
 				fmt.Sprintf("Reconciliation failed (attempt %d/%d, in backoff for %v), retrying in %v. Last successful artifact maintained: %v",
-					retryCount+1, maxRetryAttempts, backoffDuration.Truncate(time.Second), retryDelay.Truncate(time.Second), err.Error()))
+					retryCount+1, r.Config.Retry.MaxAttempts, backoffDuration.Truncate(time.Second), retryDelay.Truncate(time.Second), err.Error()))
 
 			r.incrementRetryCount(&externalSource, err)
 
@@ -252,7 +249,7 @@ func (r *ExternalSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				message = fmt.Sprintf("Permanent error (will not retry): %v", err.Error())
 			default:
 				reason = "MaxRetriesExceeded"
-				message = fmt.Sprintf("Max retries exceeded (%d attempts): %v", maxRetryAttempts, err.Error())
+				message = fmt.Sprintf("Max retries exceeded (%d attempts): %v", r.Config.Retry.MaxAttempts, err.Error())
 				r.setCondition(&externalSource, StalledCondition, metav1.ConditionTrue, reason, message)
 			}
 
@@ -285,6 +282,8 @@ func (r *ExternalSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 // reconcile performs the main reconciliation logic
+//
+//nolint:unparam // ctrl.Result is always nil but required by interface contract for future extensibility
 func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource *sourcev1alpha1.ExternalSource) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -435,13 +434,13 @@ func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource
 
 // createGeneratorConfig creates a generator configuration from the ExternalSource spec
 func (r *ExternalSourceReconciler) createGeneratorConfig(externalSource *sourcev1alpha1.ExternalSource) (*generator.GeneratorConfig, error) {
-	config := &generator.GeneratorConfig{
+	genConfig := &generator.GeneratorConfig{
 		Type:   externalSource.Spec.Generator.Type,
 		Config: make(map[string]interface{}),
 	}
 
 	// Add namespace for secret resolution
-	config.Config["namespace"] = externalSource.Namespace
+	genConfig.Config["namespace"] = externalSource.Namespace
 
 	// Configure based on generator type
 	switch externalSource.Spec.Generator.Type {
@@ -451,24 +450,24 @@ func (r *ExternalSourceReconciler) createGeneratorConfig(externalSource *sourcev
 		}
 
 		httpSpec := externalSource.Spec.Generator.HTTP
-		config.Config["url"] = httpSpec.URL
+		genConfig.Config["url"] = httpSpec.URL
 
 		if httpSpec.Method != "" {
-			config.Config["method"] = httpSpec.Method
+			genConfig.Config["method"] = httpSpec.Method
 		}
 
 		if httpSpec.InsecureSkipVerify {
-			config.Config["insecureSkipVerify"] = true
+			genConfig.Config["insecureSkipVerify"] = true
 		}
 
 		if httpSpec.HeadersSecretRef != nil && httpSpec.HeadersSecretRef.Name != "" {
-			config.Config["headersSecretName"] = httpSpec.HeadersSecretRef.Name
+			genConfig.Config["headersSecretName"] = httpSpec.HeadersSecretRef.Name
 		}
 
 		if httpSpec.CABundleSecretRef != nil && httpSpec.CABundleSecretRef.Name != "" {
-			config.Config["caBundleSecretName"] = httpSpec.CABundleSecretRef.Name
+			genConfig.Config["caBundleSecretName"] = httpSpec.CABundleSecretRef.Name
 			if httpSpec.CABundleSecretRef.Key != "" {
-				config.Config["caBundleSecretKey"] = httpSpec.CABundleSecretRef.Key
+				genConfig.Config["caBundleSecretKey"] = httpSpec.CABundleSecretRef.Key
 			}
 		}
 
@@ -476,7 +475,7 @@ func (r *ExternalSourceReconciler) createGeneratorConfig(externalSource *sourcev
 		return nil, fmt.Errorf("unsupported generator type: %s", externalSource.Spec.Generator.Type)
 	}
 
-	return config, nil
+	return genConfig, nil
 }
 
 // reconcileExternalArtifact creates or updates the ExternalArtifact child resource
@@ -551,6 +550,8 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 }
 
 // reconcileDelete handles the deletion of an ExternalSource
+//
+//nolint:unparam // ctrl.Result is always nil but required by interface contract for future extensibility
 func (r *ExternalSourceReconciler) reconcileDelete(ctx context.Context, externalSource *sourcev1alpha1.ExternalSource) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -712,16 +713,16 @@ func (r *ExternalSourceReconciler) calculateRetryDelay(externalSource *sourcev1a
 
 	retryCount := r.getRetryCount(externalSource)
 
-	if retryCount >= maxRetryAttempts {
+	if retryCount >= r.Config.Retry.MaxAttempts {
 		return 0 // No more retries
 	}
 
 	// Exponential backoff: baseDelay * 2^retryCount
-	delay := time.Duration(float64(baseRetryDelay) * math.Pow(2, float64(retryCount)))
+	delay := time.Duration(float64(r.Config.Retry.BaseDelay) * math.Pow(2, float64(retryCount)))
 
 	// Cap at maximum delay
-	if delay > maxRetryDelay {
-		delay = maxRetryDelay
+	if delay > r.Config.Retry.MaxDelay {
+		delay = r.Config.Retry.MaxDelay
 	}
 
 	// Add jitter to prevent thundering herd
@@ -732,12 +733,12 @@ func (r *ExternalSourceReconciler) calculateRetryDelay(externalSource *sourcev1a
 	}
 	rng := rand.New(rand.NewSource(seed + int64(retryCount)))
 
-	jitter := time.Duration(float64(delay) * jitterFactor * (2*rng.Float64() - 1))
+	jitter := time.Duration(float64(delay) * r.Config.Retry.JitterFactor * (2*rng.Float64() - 1))
 	delay += jitter
 
 	// Ensure minimum delay
-	if delay < baseRetryDelay {
-		delay = baseRetryDelay
+	if delay < r.Config.Retry.BaseDelay {
+		delay = r.Config.Retry.BaseDelay
 	}
 
 	return delay
@@ -887,9 +888,47 @@ func (r *ExternalSourceReconciler) performRecovery(ctx context.Context, external
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ExternalSourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Register built-in generators
+	// Initialize components if not already set
+	if r.GeneratorFactory == nil {
+		r.GeneratorFactory = generator.NewFactory()
+	}
+
+	if r.Transformer == nil {
+		r.Transformer = transformer.NewCELTransformerWithConfig(r.Config.Transform.Timeout, r.Config.Transform.MemoryLimit)
+	}
+
+	if r.ArtifactManager == nil {
+		var storageBackend storage.StorageBackend
+
+		switch r.Config.Storage.Backend {
+		case "s3":
+			storageBackend = storage.NewS3Backend(storage.S3Config{
+				Endpoint:  r.Config.Storage.S3.Endpoint,
+				Bucket:    r.Config.Storage.S3.Bucket,
+				Region:    r.Config.Storage.S3.Region,
+				AccessKey: r.Config.Storage.S3.AccessKeyID,
+				SecretKey: r.Config.Storage.S3.SecretAccessKey,
+				UseSSL:    r.Config.Storage.S3.UseSSL,
+			})
+		case "memory":
+			storageBackend = storage.NewMemoryBackend()
+		default:
+			return fmt.Errorf("unsupported storage backend: %s", r.Config.Storage.Backend)
+		}
+
+		r.ArtifactManager = artifact.NewManager(storageBackend)
+	}
+
+	// Register built-in generators with HTTP client configuration
 	if err := r.GeneratorFactory.RegisterGenerator("http", func() generator.SourceGenerator {
-		return generator.NewHTTPGenerator(r.Client)
+		return generator.NewHTTPGeneratorWithConfig(r.Client, &generator.HTTPClientConfig{
+			Timeout:             r.Config.HTTP.Timeout,
+			MaxIdleConns:        r.Config.HTTP.MaxIdleConns,
+			MaxIdleConnsPerHost: r.Config.HTTP.MaxIdleConnsPerHost,
+			MaxConnsPerHost:     r.Config.HTTP.MaxConnsPerHost,
+			IdleConnTimeout:     r.Config.HTTP.IdleConnTimeout,
+			UserAgent:           r.Config.HTTP.UserAgent,
+		})
 	}); err != nil {
 		return fmt.Errorf("failed to register HTTP generator: %w", err)
 	}

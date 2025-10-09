@@ -72,6 +72,27 @@ spec:
           capabilities:
             drop:
             - "ALL"
+        env:
+        - name: CONFIG_MAP_NAME
+          value: "externalsource-controller-config"
+        - name: CONFIG_MAP_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: STORAGE_BACKEND
+          value: "memory"
+        - name: METRICS_ENABLED
+          value: "true"
+        - name: HTTP_TIMEOUT
+          value: "30s"
+        - name: RETRY_MAX_ATTEMPTS
+          value: "10"
+        - name: RETRY_BASE_DELAY
+          value: "1s"
+        - name: RETRY_MAX_DELAY
+          value: "5m"
+        - name: TRANSFORM_TIMEOUT
+          value: "30s"
         livenessProbe:
           httpGet:
             path: /healthz
@@ -84,15 +105,15 @@ spec:
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
-        # TODO(user): Configure the resources accordingly based on the project requirements.
+        # Resource limits configured for production workloads
         # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
         resources:
           limits:
-            cpu: 500m
-            memory: 128Mi
+            cpu: 1000m
+            memory: 512Mi
           requests:
-            cpu: 10m
-            memory: 64Mi
+            cpu: 100m
+            memory: 256Mi
         volumeMounts: []
       volumes: []
       serviceAccountName: controller-manager

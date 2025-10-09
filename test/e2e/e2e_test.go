@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -271,15 +272,294 @@ var _ = Describe("Manager", Ordered, func() {
 
 		// +kubebuilder:scaffold:e2e-webhooks-checks
 
-		// TODO: Customize the e2e test suite with scenarios specific to your project.
-		// Consider applying sample/CR(s) and check their status and/or verifying
-		// the reconciliation by using the metrics, i.e.:
-		// metricsOutput, err := getMetricsOutput()
-		// Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl pod")
-		// Expect(metricsOutput).To(ContainSubstring(
-		//    fmt.Sprintf(`controller_runtime_reconcile_total{controller="%s",result="success"} 1`,
-		//    strings.ToLower(<Kind>),
-		// ))
+		It("should successfully reconcile ExternalSource with HTTP generator", func() {
+			By("creating a test HTTP server pod")
+			testServerManifest := `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-http-server
+  namespace: ` + namespace + `
+  labels:
+    app: test-http-server
+spec:
+  containers:
+  - name: server
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: config
+      mountPath: /usr/share/nginx/html
+  volumes:
+  - name: config
+    configMap:
+      name: test-data
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-data
+  namespace: ` + namespace + `
+data:
+  data.json: |
+    {
+      "message": "Hello from ExternalSource",
+      "timestamp": "2025-01-01T00:00:00Z",
+      "items": ["item1", "item2", "item3"]
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-http-server
+  namespace: ` + namespace + `
+spec:
+  selector:
+    app: test-http-server
+  ports:
+  - port: 80
+    targetPort: 80
+`
+			cmd := exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = strings.NewReader(testServerManifest)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create test HTTP server")
+
+			By("waiting for the test HTTP server to be ready")
+			verifyServerReady := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "pod", "test-http-server", "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Running"))
+			}
+			Eventually(verifyServerReady).Should(Succeed())
+
+			By("creating an ExternalSource resource")
+			externalSourceManifest := `
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: test-external-source
+  namespace: ` + namespace + `
+spec:
+  interval: 30s
+  generator:
+    type: http
+    http:
+      url: http://test-http-server.` + namespace + `.svc.cluster.local/data.json
+      method: GET
+  destinationPath: config.json
+`
+			cmd = exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = strings.NewReader(externalSourceManifest)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create ExternalSource")
+
+			By("waiting for ExternalSource to be ready")
+			verifyExternalSourceReady := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "externalsource", "test-external-source", "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("True"))
+			}
+			Eventually(verifyExternalSourceReady, 2*time.Minute).Should(Succeed())
+
+			By("verifying that an ExternalArtifact was created")
+			verifyExternalArtifactCreated := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "externalartifact", "test-external-source", "-n", namespace, "-o", "jsonpath={.spec.url}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).NotTo(BeEmpty())
+			}
+			Eventually(verifyExternalArtifactCreated).Should(Succeed())
+
+			By("verifying reconciliation metrics")
+			verifyReconciliationMetrics := func(g Gomega) {
+				metricsOutput, err := getMetricsOutput()
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(metricsOutput).To(ContainSubstring("externalsource_reconciliations_total"))
+			}
+			Eventually(verifyReconciliationMetrics).Should(Succeed())
+
+			By("cleaning up test resources")
+			cmd = exec.Command("kubectl", "delete", "externalsource", "test-external-source", "-n", namespace)
+			_, _ = utils.Run(cmd)
+			cmd = exec.Command("kubectl", "delete", "pod,service,configmap", "-l", "app=test-http-server", "-n", namespace)
+			_, _ = utils.Run(cmd)
+		})
+
+		It("should handle ExternalSource with transformation", func() {
+			By("creating a test HTTP server with JSON data")
+			testServerManifest := `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: transform-test-data
+  namespace: ` + namespace + `
+data:
+  data.json: |
+    {
+      "users": [
+        {"name": "Alice", "age": 30, "active": true},
+        {"name": "Bob", "age": 25, "active": false},
+        {"name": "Charlie", "age": 35, "active": true}
+      ]
+    }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: transform-test-server
+  namespace: ` + namespace + `
+  labels:
+    app: transform-test-server
+spec:
+  containers:
+  - name: server
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: config
+      mountPath: /usr/share/nginx/html
+  volumes:
+  - name: config
+    configMap:
+      name: transform-test-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transform-test-server
+  namespace: ` + namespace + `
+spec:
+  selector:
+    app: transform-test-server
+  ports:
+  - port: 80
+    targetPort: 80
+`
+			cmd := exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = strings.NewReader(testServerManifest)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create transform test HTTP server")
+
+			By("waiting for the transform test HTTP server to be ready")
+			verifyServerReady := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "pod", "transform-test-server", "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Running"))
+			}
+			Eventually(verifyServerReady).Should(Succeed())
+
+			By("creating an ExternalSource with CEL transformation")
+			externalSourceManifest := `
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: test-transform-source
+  namespace: ` + namespace + `
+spec:
+  interval: 30s
+  generator:
+    type: http
+    http:
+      url: http://transform-test-server.` + namespace + `.svc.cluster.local/data.json
+      method: GET
+  transform:
+    type: cel
+    expression: |
+      {
+        "active_users": input.users.filter(u, u.active).map(u, {"name": u.name, "age": u.age}),
+        "total_count": size(input.users),
+        "active_count": size(input.users.filter(u, u.active))
+      }
+  destinationPath: transformed.json
+`
+			cmd = exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = strings.NewReader(externalSourceManifest)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create ExternalSource with transformation")
+
+			By("waiting for ExternalSource with transformation to be ready")
+			verifyTransformSourceReady := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "externalsource", "test-transform-source", "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("True"))
+			}
+			Eventually(verifyTransformSourceReady, 2*time.Minute).Should(Succeed())
+
+			By("verifying that transformation metrics are recorded")
+			verifyTransformationMetrics := func(g Gomega) {
+				metricsOutput, err := getMetricsOutput()
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(metricsOutput).To(ContainSubstring("externalsource_transformations_total"))
+			}
+			Eventually(verifyTransformationMetrics).Should(Succeed())
+
+			By("cleaning up transform test resources")
+			cmd = exec.Command("kubectl", "delete", "externalsource", "test-transform-source", "-n", namespace)
+			_, _ = utils.Run(cmd)
+			cmd = exec.Command("kubectl", "delete", "pod,service,configmap", "-l", "app=transform-test-server", "-n", namespace)
+			_, _ = utils.Run(cmd)
+		})
+
+		It("should handle ExternalSource error scenarios gracefully", func() {
+			By("creating an ExternalSource with invalid URL")
+			invalidSourceManifest := `
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: test-invalid-source
+  namespace: ` + namespace + `
+spec:
+  interval: 30s
+  generator:
+    type: http
+    http:
+      url: http://non-existent-server.invalid/data.json
+      method: GET
+`
+			cmd := exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = strings.NewReader(invalidSourceManifest)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create invalid ExternalSource")
+
+			By("waiting for ExternalSource to show error condition")
+			verifyErrorCondition := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "externalsource", "test-invalid-source", "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("False"))
+			}
+			Eventually(verifyErrorCondition, 2*time.Minute).Should(Succeed())
+
+			By("verifying error metrics are recorded")
+			verifyErrorMetrics := func(g Gomega) {
+				metricsOutput, err := getMetricsOutput()
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(metricsOutput).To(ContainSubstring("externalsource_reconciliations_total"))
+			}
+			Eventually(verifyErrorMetrics).Should(Succeed())
+
+			By("cleaning up invalid source")
+			cmd = exec.Command("kubectl", "delete", "externalsource", "test-invalid-source", "-n", namespace)
+			_, _ = utils.Run(cmd)
+		})
+
+		It("should verify controller configuration is loaded correctly", func() {
+			By("checking controller logs for configuration loading")
+			verifyConfigLoaded := func(g Gomega) {
+				cmd := exec.Command("kubectl", "logs", controllerPodName, "-n", namespace)
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(ContainSubstring("Configuration loaded successfully"))
+			}
+			Eventually(verifyConfigLoaded).Should(Succeed())
+		})
 	})
 })
 

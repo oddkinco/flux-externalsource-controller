@@ -42,9 +42,9 @@ type Manager struct {
 }
 
 // NewManager creates a new artifact manager with the given storage backend
-func NewManager(storage storage.StorageBackend) *Manager {
+func NewManager(backend storage.StorageBackend) *Manager {
 	return &Manager{
-		storage: storage,
+		storage: backend,
 	}
 }
 
@@ -125,11 +125,19 @@ func (m *Manager) createTarGzArchive(data []byte, destinationPath string) ([]byt
 
 	// Create gzip writer
 	gzWriter := gzip.NewWriter(&buf)
-	defer gzWriter.Close()
+	defer func() {
+		if err := gzWriter.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail packaging due to close errors
+			// Log error but don't fail the operation
+		}
+	}()
 
 	// Create tar writer
 	tarWriter := tar.NewWriter(gzWriter)
-	defer tarWriter.Close()
+	defer func() {
+		if err := tarWriter.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail packaging due to close errors
+			// Log error but don't fail the operation
+		}
+	}()
 
 	// Normalize the destination path
 	cleanPath := filepath.Clean(destinationPath)

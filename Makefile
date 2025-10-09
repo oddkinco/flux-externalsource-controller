@@ -90,6 +90,27 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
 
+.PHONY: test-e2e-comprehensive
+test-e2e-comprehensive: ## Run comprehensive e2e tests with custom script
+	@echo "Running comprehensive E2E tests..."
+	./test/e2e/run-e2e.sh
+
+.PHONY: test-e2e-build
+test-e2e-build: ## Build controller image for e2e tests
+	./test/e2e/run-e2e.sh build
+
+.PHONY: test-e2e-setup
+test-e2e-setup: ## Setup e2e test environment
+	./test/e2e/run-e2e.sh setup
+
+.PHONY: test-e2e-run
+test-e2e-run: ## Run e2e tests only (assumes environment is ready)
+	./test/e2e/run-e2e.sh test
+
+.PHONY: test-e2e-cleanup
+test-e2e-cleanup: ## Cleanup e2e test environment
+	./test/e2e/run-e2e.sh cleanup
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run

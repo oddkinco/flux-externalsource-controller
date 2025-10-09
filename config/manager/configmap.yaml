@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: externalsource-controller-config
+  namespace: system
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/managed-by: kustomize
+data:
+  # Storage configuration
+  storage.backend: "memory"
+  
+  # S3 configuration (uncomment and configure for production)
+  # storage.s3.endpoint: "https://s3.amazonaws.com"
+  # storage.s3.bucket: "externalsource-artifacts"
+  # storage.s3.region: "us-east-1"
+  # storage.s3.useSSL: "true"
+  # storage.s3.pathStyle: "false"
+  
+  # HTTP client configuration
+  http.timeout: "30s"
+  http.maxIdleConns: "100"
+  http.maxIdleConnsPerHost: "10"
+  http.maxConnsPerHost: "100"
+  http.idleConnTimeout: "90s"
+  http.userAgent: "externalsource-controller/1.0"
+  
+  # Retry configuration
+  retry.maxAttempts: "10"
+  retry.baseDelay: "1s"
+  retry.maxDelay: "5m"
+  retry.jitterFactor: "0.25"
+  
+  # Transformation configuration
+  transform.timeout: "30s"
+  transform.memoryLimit: "67108864"  # 64MB in bytes
+  
+  # Metrics configuration
+  metrics.enabled: "true"
+  metrics.interval: "15s"

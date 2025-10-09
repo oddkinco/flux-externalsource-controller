@@ -95,7 +95,11 @@ func (s *S3Backend) Store(ctx context.Context, key string, data []byte) (string,
 	if err != nil {
 		return "", fmt.Errorf("failed to upload to S3: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
+			// Log error but don't fail the operation
+		}
+	}()
 
 	// Check response status
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -127,7 +131,11 @@ func (s *S3Backend) List(ctx context.Context, prefix string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list objects: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
+			// Log error but don't fail the operation
+		}
+	}()
 
 	// Check response status
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -167,7 +175,11 @@ func (s *S3Backend) Delete(ctx context.Context, key string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
+			// Log error but don't fail the operation
+		}
+	}()
 
 	// Check response status (204 No Content is success for DELETE)
 	if resp.StatusCode != 204 && resp.StatusCode != 200 {

@@ -35,7 +35,8 @@ import (
 
 // CELTransformer implements the Transformer interface using CEL (Common Expression Language)
 type CELTransformer struct {
-	timeout time.Duration
+	timeout     time.Duration
+	memoryLimit int64
 }
 
 // NewCELTransformer creates a new CEL transformer with the specified timeout
@@ -44,7 +45,22 @@ func NewCELTransformer(timeout time.Duration) *CELTransformer {
 		timeout = 30 * time.Second // Default timeout
 	}
 	return &CELTransformer{
-		timeout: timeout,
+		timeout:     timeout,
+		memoryLimit: 64 * 1024 * 1024, // Default 64MB
+	}
+}
+
+// NewCELTransformerWithConfig creates a new CEL transformer with custom configuration
+func NewCELTransformerWithConfig(timeout time.Duration, memoryLimit int64) *CELTransformer {
+	if timeout <= 0 {
+		timeout = 30 * time.Second // Default timeout
+	}
+	if memoryLimit <= 0 {
+		memoryLimit = 64 * 1024 * 1024 // Default 64MB
+	}
+	return &CELTransformer{
+		timeout:     timeout,
+		memoryLimit: memoryLimit,
 	}
 }
 

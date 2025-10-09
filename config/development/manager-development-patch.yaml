@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: externalsource-controller-system
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: manager
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        env:
+        - name: STORAGE_BACKEND
+          value: "memory"
+        - name: METRICS_ENABLED
+          value: "true"
+        - name: HTTP_TIMEOUT
+          value: "30s"
+        - name: RETRY_MAX_ATTEMPTS
+          value: "5"
+        - name: TRANSFORM_TIMEOUT
+          value: "30s"

@@ -36,9 +36,15 @@ import (
 
 	sourcev1alpha1 "github.com/example/externalsource-controller/api/v1alpha1"
 	"github.com/example/externalsource-controller/internal/artifact"
+	"github.com/example/externalsource-controller/internal/config"
 	"github.com/example/externalsource-controller/internal/generator"
 	"github.com/example/externalsource-controller/internal/transformer"
 )
+
+// createTestConfig creates a default configuration for testing
+func createTestConfig() *config.Config {
+	return config.DefaultConfig()
+}
 
 var _ = Describe("ExternalSource Controller", func() {
 	Context("CRD Validation", func() {
@@ -318,6 +324,7 @@ var _ = Describe("ExternalSource Controller", func() {
 			controllerReconciler := &ExternalSourceReconciler{
 				Client:           k8sClient,
 				Scheme:           k8sClient.Scheme(),
+				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
 				Transformer:      mockTransformer,
 				ArtifactManager:  mockArtifactManager,
@@ -381,6 +388,7 @@ var _ = Describe("ExternalSource Controller", func() {
 			controllerReconciler := &ExternalSourceReconciler{
 				Client:           k8sClient,
 				Scheme:           k8sClient.Scheme(),
+				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
 				Transformer:      mockTransformer,
 				ArtifactManager:  mockArtifactManager,
@@ -424,9 +432,9 @@ type MockSourceGenerator struct {
 	GetLastModifiedFunc          func(ctx context.Context, config generator.GeneratorConfig) (string, error)
 }
 
-func (m *MockSourceGenerator) Generate(ctx context.Context, config generator.GeneratorConfig) (*generator.SourceData, error) {
+func (m *MockSourceGenerator) Generate(ctx context.Context, genConfig generator.GeneratorConfig) (*generator.SourceData, error) {
 	if m.GenerateFunc != nil {
-		return m.GenerateFunc(ctx, config)
+		return m.GenerateFunc(ctx, genConfig)
 	}
 	return &generator.SourceData{
 		Data:         []byte(`{"test": "data"}`),
@@ -442,9 +450,9 @@ func (m *MockSourceGenerator) SupportsConditionalFetch() bool {
 	return true
 }
 
-func (m *MockSourceGenerator) GetLastModified(ctx context.Context, config generator.GeneratorConfig) (string, error) {
+func (m *MockSourceGenerator) GetLastModified(ctx context.Context, genConfig generator.GeneratorConfig) (string, error) {
 	if m.GetLastModifiedFunc != nil {
-		return m.GetLastModifiedFunc(ctx, config)
+		return m.GetLastModifiedFunc(ctx, genConfig)
 	}
 	return "test-etag", nil
 }
@@ -561,6 +569,7 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 			reconciler = &ExternalSourceReconciler{
 				Client:           k8sClient,
 				Scheme:           k8sClient.Scheme(),
+				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
 				Transformer:      mockTransformer,
 				ArtifactManager:  mockArtifactManager,
@@ -917,6 +926,7 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 			reconciler = &ExternalSourceReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
+				Config: createTestConfig(),
 			}
 		})
 
@@ -1037,6 +1047,7 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 			reconciler = &ExternalSourceReconciler{
 				Client:          k8sClient,
 				Scheme:          k8sClient.Scheme(),
+				Config:          createTestConfig(),
 				MetricsRecorder: mockMetrics,
 			}
 		})
@@ -1328,6 +1339,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 			reconciler = &ExternalSourceReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
+				Config: createTestConfig(),
 			}
 			_ = ctx // Prevent unused variable error
 		})
@@ -1369,8 +1381,8 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 			By("calculating delay for first retry")
 			transientErr := fmt.Errorf("network timeout")
 			delay := reconciler.calculateRetryDelay(externalSource, transientErr)
-			Expect(delay).To(BeNumerically(">=", baseRetryDelay))
-			Expect(delay).To(BeNumerically("<=", baseRetryDelay*2)) // With jitter
+			Expect(delay).To(BeNumerically(">=", reconciler.Config.Retry.BaseDelay))
+			Expect(delay).To(BeNumerically("<=", reconciler.Config.Retry.BaseDelay*2)) // With jitter
 
 			By("calculating delay after multiple retries")
 			// Simulate multiple retries
@@ -1379,9 +1391,9 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 			}
 
 			delay = reconciler.calculateRetryDelay(externalSource, transientErr)
-			expectedDelay := time.Duration(float64(baseRetryDelay) * 8) // 2^3 = 8
-			Expect(delay).To(BeNumerically(">=", expectedDelay/2))      // Account for jitter
-			Expect(delay).To(BeNumerically("<=", expectedDelay*2))      // Account for jitter
+			expectedDelay := time.Duration(float64(reconciler.Config.Retry.BaseDelay) * 8) // 2^3 = 8
+			Expect(delay).To(BeNumerically(">=", expectedDelay/2))                         // Account for jitter
+			Expect(delay).To(BeNumerically("<=", expectedDelay*2))                         // Account for jitter
 
 			By("returning zero delay for configuration errors")
 			configErr := fmt.Errorf("invalid interval format")
@@ -1395,7 +1407,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 
 			By("returning zero delay after max retries")
 			// Simulate max retries
-			for i := 3; i < maxRetryAttempts; i++ {
+			for i := 3; i < reconciler.Config.Retry.MaxAttempts; i++ {
 				reconciler.incrementRetryCount(externalSource, transientErr)
 			}
 
@@ -1499,6 +1511,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 			reconciler = &ExternalSourceReconciler{
 				Client:           k8sClient,
 				Scheme:           k8sClient.Scheme(),
+				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
 				Transformer:      mockTransformer,
 				ArtifactManager:  mockArtifactManager,
@@ -1716,6 +1729,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 			reconciler = &ExternalSourceReconciler{
 				Client:           k8sClient,
 				Scheme:           k8sClient.Scheme(),
+				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
 				Transformer:      mockTransformer,
 				ArtifactManager:  mockArtifactManager,
@@ -1783,7 +1797,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 
 			By("verifying eventual stalling after max retries")
 			// Continue until max retries
-			for i := 5; i < maxRetryAttempts; i++ {
+			for i := 5; i < reconciler.Config.Retry.MaxAttempts; i++ {
 				result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result.RequeueAfter).To(BeNumerically(">", 0))

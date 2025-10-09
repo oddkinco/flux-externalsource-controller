@@ -87,9 +87,9 @@ func TestPrometheusRecorder_RecordReconciliation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder.RecordReconciliation(tt.namespace, tt.sourceName, tt.sourceType, tt.success, tt.duration)
 
-			successLabel := "false"
+			successLabel := successFalse
 			if tt.success {
-				successLabel = "true"
+				successLabel = successTrue
 			}
 
 			// Check counter metric
@@ -150,9 +150,9 @@ func TestPrometheusRecorder_RecordSourceRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder.RecordSourceRequest(tt.sourceType, tt.success, tt.duration)
 
-			successLabel := "false"
+			successLabel := successFalse
 			if tt.success {
-				successLabel = "true"
+				successLabel = successTrue
 			}
 
 			// Check counter metric
@@ -209,9 +209,9 @@ func TestPrometheusRecorder_RecordTransformation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder.RecordTransformation(tt.success, tt.duration)
 
-			successLabel := "false"
+			successLabel := successFalse
 			if tt.success {
-				successLabel = "true"
+				successLabel = successTrue
 			}
 
 			// Check counter metric
@@ -278,9 +278,9 @@ func TestPrometheusRecorder_RecordArtifactOperation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			recorder.RecordArtifactOperation(tt.operation, tt.success, tt.duration)
 
-			successLabel := "false"
+			successLabel := successFalse
 			if tt.success {
-				successLabel = "true"
+				successLabel = successTrue
 			}
 
 			// Check counter metric

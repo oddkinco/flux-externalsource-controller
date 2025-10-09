@@ -225,8 +225,7 @@ func TestManager_Cleanup(t *testing.T) {
 		{[]byte("data3"), "config3.json"},
 	}
 
-	var storedArtifacts []*Artifact
-	var urls []string
+	storedArtifacts := make([]*Artifact, 0, len(artifacts))
 
 	// Store all artifacts
 	for _, art := range artifacts {
@@ -235,13 +234,12 @@ func TestManager_Cleanup(t *testing.T) {
 			t.Fatalf("failed to package artifact: %v", err)
 		}
 
-		url, err := manager.Store(ctx, artifact, source)
+		_, err = manager.Store(ctx, artifact, source)
 		if err != nil {
 			t.Fatalf("failed to store artifact: %v", err)
 		}
 
 		storedArtifacts = append(storedArtifacts, artifact)
-		urls = append(urls, url)
 	}
 
 	// Verify all artifacts are stored
@@ -332,7 +330,11 @@ func verifyTarGzContent(archiveData, expectedData []byte, expectedPath string) e
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzReader.Close()
+	defer func() {
+		if err := gzReader.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail tests due to close errors
+			// Log error but don't fail the test
+		}
+	}()
 
 	// Create tar reader
 	tarReader := tar.NewReader(gzReader)

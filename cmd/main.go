@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	sourcev1alpha1 "github.com/example/externalsource-controller/api/v1alpha1"
+	"github.com/example/externalsource-controller/internal/config"
 	"github.com/example/externalsource-controller/internal/controller"
 	"github.com/example/externalsource-controller/internal/metrics"
 	// +kubebuilder:scaffold:imports
@@ -185,13 +186,27 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Load configuration
+	configManager := config.NewManager(mgr.GetClient())
+	controllerConfig, err := configManager.LoadConfig(ctrl.SetupSignalHandler())
+	if err != nil {
+		setupLog.Error(err, "unable to load configuration")
+		os.Exit(1)
+	}
+
 	// Initialize metrics recorder
-	metricsRecorder := metrics.NewPrometheusRecorder()
+	var metricsRecorder metrics.MetricsRecorder
+	if controllerConfig.Metrics.Enabled {
+		metricsRecorder = metrics.NewPrometheusRecorder()
+	} else {
+		metricsRecorder = metrics.NewNoOpRecorder()
+	}
 
 	if err := (&controller.ExternalSourceReconciler{
 		Client:          mgr.GetClient(),
 		Scheme:          mgr.GetScheme(),
 		MetricsRecorder: metricsRecorder,
+		Config:          controllerConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ExternalSource")
 		os.Exit(1)

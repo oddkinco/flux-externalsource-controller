@@ -47,7 +47,7 @@ func TestHTTPGenerator_Generate_Success(t *testing.T) {
 		w.Header().Set("ETag", "test-etag")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message": "test data"}`))
+		_, _ = w.Write([]byte(`{"message": "test data"}`))
 	}))
 	defer server.Close()
 
@@ -83,7 +83,7 @@ func TestHTTPGenerator_Generate_HTTPError(t *testing.T) {
 	// Create test HTTP server that returns error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer server.Close()
 
@@ -239,7 +239,7 @@ func TestHTTPGenerator_ParseConfig_InsecureSkipVerify(t *testing.T) {
 func TestHTTPGenerator_LoadHeaders_Success(t *testing.T) {
 	// Create fake Kubernetes client with secret
 	scheme := runtime.NewScheme()
-	corev1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -277,7 +277,7 @@ func TestHTTPGenerator_LoadHeaders_Success(t *testing.T) {
 func TestHTTPGenerator_LoadHeaders_SecretNotFound(t *testing.T) {
 	// Create fake Kubernetes client without secret
 	scheme := runtime.NewScheme()
-	corev1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -295,7 +295,7 @@ func TestHTTPGenerator_LoadHeaders_SecretNotFound(t *testing.T) {
 func TestHTTPGenerator_LoadSecretData_Success(t *testing.T) {
 	// Create fake Kubernetes client with secret
 	scheme := runtime.NewScheme()
-	corev1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -329,7 +329,7 @@ func TestHTTPGenerator_LoadSecretData_Success(t *testing.T) {
 func TestHTTPGenerator_LoadSecretData_KeyNotFound(t *testing.T) {
 	// Create fake Kubernetes client with secret
 	scheme := runtime.NewScheme()
-	corev1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
