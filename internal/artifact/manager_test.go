@@ -32,7 +32,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/externalsource-controller/internal/storage"
+	"github.com/oddkin/flux-externalsource-controller/internal/storage"
 )
 
 func TestManager_Package(t *testing.T) {

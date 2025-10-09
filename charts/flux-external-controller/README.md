@@ -1,4 +1,4 @@
-# fx-controller Helm Chart
+# flux-external-controller Helm Chart
 
 A Helm chart for deploying the ExternalSource Controller, which integrates external data sources into GitOps workflows powered by Flux.
 
@@ -13,7 +13,7 @@ A Helm chart for deploying the ExternalSource Controller, which integrates exter
 ### Add Helm Repository
 
 ```bash
-helm repo add fx-controller oci://ghcr.io/example/charts
+helm repo add flux-external-controller oci://ghcr.io/oddkin/charts
 helm repo update
 ```
 
@@ -21,19 +21,19 @@ helm repo update
 
 ```bash
 # Install with default values
-helm install fx-controller fx-controller/fx-controller
+helm install flux-external-controller flux-external-controller/flux-external-controller
 
 # Install in custom namespace
-helm install fx-controller fx-controller/fx-controller --namespace fx-system --create-namespace
+helm install flux-external-controller flux-external-controller/flux-external-controller --namespace flux-external-system --create-namespace
 
 # Install with custom values
-helm install fx-controller fx-controller/fx-controller -f values.yaml
+helm install flux-external-controller flux-external-controller/flux-external-controller -f values.yaml
 ```
 
 ### Install from OCI Registry
 
 ```bash
-helm install fx-controller oci://ghcr.io/example/charts/fx-controller --version 0.1.0
+helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller --version 0.1.0
 ```
 
 ## Configuration
@@ -52,7 +52,7 @@ The following table lists the configurable parameters and their default values.
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Controller image repository | `ghcr.io/example/fx-controller` |
+| `image.repository` | Controller image repository | `ghcr.io/oddkin/flux-external-controller` |
 | `image.tag` | Controller image tag | `""` (uses chart appVersion) |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `imagePullSecrets` | Image pull secrets | `[]` |
@@ -107,7 +107,7 @@ The following table lists the configurable parameters and their default values.
 ### Basic Installation
 
 ```bash
-helm install fx-controller oci://ghcr.io/example/charts/fx-controller
+helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller
 ```
 
 ### Installation with S3 Storage
@@ -129,7 +129,7 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret-key=YOUR_SECRET_KEY
 
 # Install with S3 storage
-helm install fx-controller oci://ghcr.io/example/charts/fx-controller -f values-s3.yaml
+helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller -f values-s3.yaml
 ```
 
 ### Installation with Monitoring
@@ -149,7 +149,7 @@ controller:
 ```
 
 ```bash
-helm install fx-controller oci://ghcr.io/example/charts/fx-controller -f values-monitoring.yaml
+helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller -f values-monitoring.yaml
 ```
 
 ### High Availability Installation
@@ -169,7 +169,7 @@ controller:
             - key: app.kubernetes.io/name
               operator: In
               values:
-              - fx-controller
+              - flux-external-controller
           topologyKey: kubernetes.io/hostname
 
 podDisruptionBudget:
@@ -178,7 +178,7 @@ podDisruptionBudget:
 ```
 
 ```bash
-helm install fx-controller oci://ghcr.io/example/charts/fx-controller -f values-ha.yaml
+helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller -f values-ha.yaml
 ```
 
 ## Upgrading
@@ -187,13 +187,13 @@ helm install fx-controller oci://ghcr.io/example/charts/fx-controller -f values-
 
 ```bash
 helm repo update
-helm upgrade fx-controller fx-controller/fx-controller
+helm upgrade flux-external-controller flux-external-controller/flux-external-controller
 ```
 
 ### Upgrade with Custom Values
 
 ```bash
-helm upgrade fx-controller fx-controller/fx-controller -f values.yaml
+helm upgrade flux-external-controller flux-external-controller/flux-external-controller -f values.yaml
 ```
 
 ### Upgrade CRDs
@@ -202,17 +202,17 @@ CRDs are not automatically upgraded by Helm. To upgrade CRDs:
 
 ```bash
 # Download and apply latest CRDs
-kubectl apply -f https://github.com/example/fx-controller/releases/latest/download/crds.yaml
+kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/latest/download/crds.yaml
 ```
 
 ## Uninstalling
 
 ```bash
 # Uninstall the chart
-helm uninstall fx-controller
+helm uninstall flux-external-controller
 
 # Optionally remove CRDs (this will delete all ExternalSource and ExternalArtifact resources)
-kubectl delete crd externalsources.source.example.com externalartifacts.source.example.com
+kubectl delete crd externalsources.source.flux.oddkin.co externalartifacts.source.flux.oddkin.co
 ```
 
 ## Troubleshooting
@@ -221,13 +221,13 @@ kubectl delete crd externalsources.source.example.com externalartifacts.source.e
 
 1. **Controller not starting:**
    ```bash
-   kubectl logs -n fx-system deployment/fx-controller-manager
-   kubectl describe deployment -n fx-system fx-controller-manager
+   kubectl logs -n flux-external-system deployment/flux-external-controller-manager
+   kubectl describe deployment -n flux-external-system flux-external-controller-manager
    ```
 
 2. **RBAC issues:**
    ```bash
-   kubectl auth can-i create externalsources --as=system:serviceaccount:fx-system:fx-controller-manager
+   kubectl auth can-i create externalsources --as=system:serviceaccount:flux-external-system:flux-external-controller-manager
    ```
 
 3. **Storage backend issues:**
@@ -262,14 +262,14 @@ The controller exposes health check endpoints:
 
 ```bash
 # Clone the repository
-git clone https://github.com/example/fx-controller.git
-cd fx-controller
+git clone https://github.com/oddkin/flux-externalsource-controller.git
+cd flux-externalsource-controller
 
 # Install chart locally
-helm install fx-controller ./charts/fx-controller --set image.tag=dev
+helm install flux-external-controller ./charts/flux-external-controller --set image.tag=dev
 
 # Test chart templates
-helm template fx-controller ./charts/fx-controller --debug
+helm template flux-external-controller ./charts/flux-external-controller --debug
 ```
 
 ### Contributing
@@ -281,6 +281,6 @@ helm template fx-controller ./charts/fx-controller --debug
 
 ## Support
 
-- GitHub Issues: https://github.com/example/fx-controller/issues
-- Documentation: https://github.com/example/fx-controller/tree/main/docs
-- Discussions: https://github.com/example/fx-controller/discussions
+- GitHub Issues: https://github.com/oddkin/flux-externalsource-controller/issues
+- Documentation: https://github.com/oddkin/flux-externalsource-controller/tree/main/docs
+- Discussions: https://github.com/oddkin/flux-externalsource-controller/discussions

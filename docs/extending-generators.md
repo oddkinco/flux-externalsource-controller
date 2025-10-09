@@ -486,7 +486,7 @@ data:
   connectionString: dXNlcjpwYXNzd29yZEB0Y3AobXlzcWw6MzMwNikvbXlkYXRhYmFzZQ==
 
 ---
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: user-data-source
@@ -515,7 +515,7 @@ spec:
 
 ---
 # Example with transformation
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: config-from-db

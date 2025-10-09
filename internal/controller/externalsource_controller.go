@@ -37,13 +37,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	sourcev1alpha1 "github.com/example/externalsource-controller/api/v1alpha1"
-	"github.com/example/externalsource-controller/internal/artifact"
-	"github.com/example/externalsource-controller/internal/config"
-	"github.com/example/externalsource-controller/internal/generator"
-	"github.com/example/externalsource-controller/internal/metrics"
-	"github.com/example/externalsource-controller/internal/storage"
-	"github.com/example/externalsource-controller/internal/transformer"
+	sourcev1alpha1 "github.com/oddkin/flux-externalsource-controller/api/v1alpha1"
+	"github.com/oddkin/flux-externalsource-controller/internal/artifact"
+	"github.com/oddkin/flux-externalsource-controller/internal/config"
+	"github.com/oddkin/flux-externalsource-controller/internal/generator"
+	"github.com/oddkin/flux-externalsource-controller/internal/metrics"
+	"github.com/oddkin/flux-externalsource-controller/internal/storage"
+	"github.com/oddkin/flux-externalsource-controller/internal/transformer"
 )
 
 // ExternalSourceReconciler reconciles a ExternalSource object
@@ -59,12 +59,12 @@ type ExternalSourceReconciler struct {
 
 const (
 	// ExternalSourceFinalizer is the finalizer used by the ExternalSource controller
-	ExternalSourceFinalizer = "source.example.com/externalsource-finalizer"
+	ExternalSourceFinalizer = "source.flux.oddkin.co/externalsource-finalizer"
 
 	// Annotation keys for retry tracking
-	retryCountAnnotation   = "source.example.com/retry-count"
-	lastFailureAnnotation  = "source.example.com/last-failure"
-	backoffStartAnnotation = "source.example.com/backoff-start"
+	retryCountAnnotation   = "source.flux.oddkin.co/retry-count"
+	lastFailureAnnotation  = "source.flux.oddkin.co/last-failure"
+	backoffStartAnnotation = "source.flux.oddkin.co/backoff-start"
 )
 
 // Condition types for ExternalSource
@@ -100,11 +100,11 @@ const (
 	SuspendedReason = "Suspended"
 )
 
-// +kubebuilder:rbac:groups=source.example.com,resources=externalsources,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=source.example.com,resources=externalsources/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=source.example.com,resources=externalsources/finalizers,verbs=update
-// +kubebuilder:rbac:groups=source.example.com,resources=externalartifacts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=source.example.com,resources=externalartifacts/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalsources,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalsources/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalsources/finalizers,verbs=update
+// +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalartifacts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalartifacts/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 

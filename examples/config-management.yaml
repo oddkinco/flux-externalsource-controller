@@ -13,13 +13,13 @@
 #   kubectl apply -f config-management.yaml
 
 # External source that fetches application configuration
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: app-config-source
   namespace: flux-system
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     app: myapp
     config-type: application
 spec:
@@ -160,12 +160,12 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: fx-controller-metrics
+  name: flux-externalsource-controller-metrics
   namespace: flux-system
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: fx-controller
+      app.kubernetes.io/name: flux-externalsource-controller
   endpoints:
   - port: metrics
     path: /metrics
@@ -176,11 +176,11 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: fx-controller-alerts
+  name: flux-externalsource-controller-alerts
   namespace: flux-system
 spec:
   groups:
-  - name: fx-controller
+  - name: flux-externalsource-controller
     rules:
     - alert: ExternalSourceSyncFailure
       expr: |

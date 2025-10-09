@@ -1,8 +1,8 @@
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalArtifact
 metadata:
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     app.kubernetes.io/managed-by: kustomize
   name: externalartifact-sample
 spec:

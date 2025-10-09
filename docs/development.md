@@ -26,8 +26,8 @@ The ExternalSource Controller follows a modular architecture that enables easy e
 
 1. **Clone and setup:**
    ```bash
-   git clone https://github.com/example/fx-controller.git
-   cd fx-controller
+   git clone https://github.com/oddkin/flux-externalsource-controller.git
+   cd flux-externalsource-controller
    go mod download
    ```
 
@@ -364,7 +364,7 @@ Add your generator to the examples and documentation:
 
 ```yaml
 # examples/s3-source.yaml
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: s3-config-source
@@ -651,7 +651,7 @@ dlv debug ./cmd/main.go -- --log-level=debug
 
 ```bash
 # Check controller logs
-kubectl logs -n fx-system deployment/fx-controller-manager -f
+kubectl logs -n flux-external-controller-system deployment/flux-external-controller-manager -f
 
 # Debug ExternalSource status
 kubectl describe externalsource <name>
@@ -660,7 +660,7 @@ kubectl describe externalsource <name>
 kubectl get externalartifact -o yaml
 
 # View controller metrics
-kubectl port-forward -n fx-system svc/fx-controller-metrics 8080:8080
+kubectl port-forward -n flux-external-controller-system svc/flux-external-controller-metrics 8080:8080
 curl http://localhost:8080/metrics
 ```
 

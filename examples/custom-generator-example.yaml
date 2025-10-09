@@ -16,13 +16,13 @@ data:
   token: aHZzLjEyMzQ1Njc4OTA=
 
 ---
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: vault-secrets
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: custom-generator
 spec:
   interval: 30m  # Check for secret updates every 30 minutes
@@ -256,7 +256,7 @@ spec:
 
 ---
 # Advanced usage with multiple secrets and transformation:
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: vault-multi-secrets

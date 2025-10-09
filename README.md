@@ -38,20 +38,20 @@ The ExternalSource Controller is a Kubernetes operator built using the Kubebuild
 
 1. **Install the CRDs:**
    ```bash
-   kubectl apply -f https://github.com/example/fx-controller/releases/latest/download/crds.yaml
+   kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/latest/download/crds.yaml
    ```
 
 2. **Deploy the controller:**
    ```bash
-   kubectl apply -f https://github.com/example/fx-controller/releases/latest/download/fx-controller.yaml
+   kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/latest/download/flux-external-controller.yaml
    ```
 
 #### Option 2: Build from Source
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/example/fx-controller.git
-   cd fx-controller
+   git clone https://github.com/oddkin/flux-externalsource-controller.git
+   cd flux-externalsource-controller
    ```
 
 2. **Install CRDs:**
@@ -61,15 +61,15 @@ The ExternalSource Controller is a Kubernetes operator built using the Kubebuild
 
 3. **Build and deploy:**
    ```bash
-   make docker-build docker-push IMG=<your-registry>/fx-controller:latest
-   make deploy IMG=<your-registry>/fx-controller:latest
+   make docker-build docker-push IMG=<your-registry>/flux-external-controller:latest
+   make deploy IMG=<your-registry>/flux-external-controller:latest
    ```
 
 ### Basic Usage
 
 1. **Create an ExternalSource resource:**
    ```yaml
-   apiVersion: source.example.com/v1alpha1
+   apiVersion: source.flux.oddkin.co/v1alpha1
    kind: ExternalSource
    metadata:
      name: my-config
@@ -157,7 +157,7 @@ The controller supports configuration through environment variables:
 Fetch JSON configuration from an API:
 
 ```yaml
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: app-config
@@ -185,7 +185,7 @@ type: Opaque
 data:
   Authorization: Bearer <base64-encoded-token>
 ---
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: secure-config
@@ -205,7 +205,7 @@ spec:
 Transform API response before packaging:
 
 ```yaml
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: transformed-config
@@ -242,7 +242,7 @@ type: Opaque
 data:
   ca.crt: <base64-encoded-ca-certificate>
 ---
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: tls-config
@@ -289,7 +289,7 @@ The controller exposes metrics at `/metrics` endpoint:
 View controller logs for detailed troubleshooting:
 
 ```bash
-kubectl logs -n fx-system deployment/fx-controller-manager
+kubectl logs -n flux-external-controller-system deployment/flux-external-controller-manager
 ```
 
 ## Flux Integration
@@ -351,10 +351,10 @@ kubectl get externalsource -A
 kubectl describe externalsource <name>
 
 # Check controller logs
-kubectl logs -n fx-system deployment/fx-controller-manager
+kubectl logs -n flux-external-controller-system deployment/flux-external-controller-manager
 
 # View metrics
-kubectl port-forward -n fx-system svc/fx-controller-metrics 8080:8080
+kubectl port-forward -n flux-external-controller-system svc/flux-external-controller-metrics 8080:8080
 curl http://localhost:8080/metrics
 ```
 
@@ -377,7 +377,7 @@ make build
 make test
 
 # Build container image
-make docker-build IMG=fx-controller:dev
+make docker-build IMG=flux-external-controller:dev
 
 # Run locally (requires cluster access)
 make run

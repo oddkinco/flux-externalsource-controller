@@ -24,9 +24,9 @@ The project uses two distinct release workflows:
 - Updated documentation
 
 **Artifacts created:**
-- `ghcr.io/example/fx-controller:v1.0.0` (Docker image)
-- `oci://ghcr.io/example/charts/fx-controller:1.0.0` (Helm chart)
-- GitHub release with `install.yaml` and `fx-controller-1.0.0.tgz`
+- `ghcr.io/oddkin/flux-external-controller:v1.0.0` (Docker image)
+- `oci://ghcr.io/oddkin/charts/flux-external-controller:1.0.0` (Helm chart)
+- GitHub release with `install.yaml` and `flux-external-controller-1.0.0.tgz`
 - Checksums file for verification
 
 ### ⚓ Helm Chart Release
@@ -43,7 +43,7 @@ The project uses two distinct release workflows:
 - Chart repository index update
 
 **Artifacts created:**
-- `oci://ghcr.io/example/charts/fx-controller:0.1.1` (Helm chart only)
+- `oci://ghcr.io/oddkin/charts/flux-external-controller:0.1.1` (Helm chart only)
 
 ## How to Release
 
@@ -90,10 +90,10 @@ git push origin v1.0.0
 
 ```bash
 # Check Docker image
-docker pull ghcr.io/example/fx-controller:v1.0.0
+docker pull ghcr.io/oddkin/flux-external-controller:v1.0.0
 
 # Check Helm chart
-helm pull oci://ghcr.io/example/charts/fx-controller --version 1.0.0
+helm pull oci://ghcr.io/oddkin/charts/flux-external-controller --version 1.0.0
 
 # Verify GitHub release exists
 gh release view v1.0.0
@@ -107,8 +107,8 @@ Use this for Helm chart improvements that don't require code changes.
 
 ```bash
 # Make changes to chart files
-vim charts/fx-controller/values.yaml
-vim charts/fx-controller/templates/deployment.yaml
+vim charts/flux-external-controller/values.yaml
+vim charts/flux-external-controller/templates/deployment.yaml
 
 # Commit and push changes
 git add charts/
@@ -158,7 +158,7 @@ The project follows [Semantic Versioning](https://semver.org/):
 
 - **Application releases**: Chart version matches Git tag version
 - **Chart-only releases**: Auto-incremented patch version
-- **Manual override**: Edit `charts/fx-controller/Chart.yaml` before tagging
+- **Manual override**: Edit `charts/flux-external-controller/Chart.yaml` before tagging
 
 ## Pre-release Versions
 
@@ -184,14 +184,14 @@ git push origin v1.0.0-alpha.1
 
 The CI workflow creates development images on every push to `main`:
 
-- `ghcr.io/example/fx-controller:main`
-- `ghcr.io/example/fx-controller:main-<sha>`
+- `ghcr.io/oddkin/flux-external-controller:main`
+- `ghcr.io/oddkin/flux-external-controller:main-<sha>`
 
 ## Release Artifacts
 
 ### Docker Images
 
-**Registry:** `ghcr.io/example/fx-controller`
+**Registry:** `ghcr.io/oddkin/flux-external-controller`
 
 **Tags created:**
 - `v1.0.0` (exact version)
@@ -205,32 +205,32 @@ The CI workflow creates development images on every push to `main`:
 
 ### Helm Charts
 
-**Registry:** `oci://ghcr.io/example/charts/fx-controller`
+**Registry:** `oci://ghcr.io/oddkin/charts/flux-external-controller`
 
 **Installation:**
 ```bash
 # Install specific version
-helm install fx-controller oci://ghcr.io/example/charts/fx-controller --version 1.0.0
+helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller --version 1.0.0
 
 # Install latest
-helm install fx-controller oci://ghcr.io/example/charts/fx-controller
+helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller
 ```
 
 ### GitHub Releases
 
 **Artifacts included:**
 - `install.yaml` - Complete installation manifest
-- `fx-controller-1.0.0.tgz` - Helm chart archive
+- `flux-external-controller-1.0.0.tgz` - Helm chart archive
 - `checksums.txt` - SHA256 checksums for verification
 
 **Installation from GitHub:**
 ```bash
 # Direct installation
-kubectl apply -f https://github.com/example/fx-controller/releases/download/v1.0.0/install.yaml
+kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/download/v1.0.0/install.yaml
 
 # Download and verify
-curl -LO https://github.com/example/fx-controller/releases/download/v1.0.0/fx-controller-1.0.0.tgz
-curl -LO https://github.com/example/fx-controller/releases/download/v1.0.0/checksums.txt
+curl -LO https://github.com/oddkin/flux-externalsource-controller/releases/download/v1.0.0/flux-external-controller-1.0.0.tgz
+curl -LO https://github.com/oddkin/flux-externalsource-controller/releases/download/v1.0.0/checksums.txt
 sha256sum -c checksums.txt
 ```
 
@@ -249,8 +249,8 @@ make docker-build IMG=test:latest
 **Helm packaging fails:**
 ```bash
 # Validate chart
-helm lint charts/fx-controller
-helm template fx-controller charts/fx-controller
+helm lint charts/flux-external-controller
+helm template flux-external-controller charts/flux-external-controller
 ```
 
 #### 2. Tag Already Exists
@@ -271,10 +271,10 @@ git push origin v1.0.0
 
 ```bash
 # Check current chart version
-grep '^version:' charts/fx-controller/Chart.yaml
+grep '^version:' charts/flux-external-controller/Chart.yaml
 
 # Manually update if needed
-sed -i 's/version: 0.1.0/version: 1.0.0/' charts/fx-controller/Chart.yaml
+sed -i 's/version: 0.1.0/version: 1.0.0/' charts/flux-external-controller/Chart.yaml
 ```
 
 ### Debugging Workflows
@@ -417,8 +417,8 @@ git push origin v1.1.0-beta.1
 
 ```bash
 # Add new configuration option
-vim charts/fx-controller/values.yaml
-vim charts/fx-controller/templates/deployment.yaml
+vim charts/flux-external-controller/values.yaml
+vim charts/flux-external-controller/templates/deployment.yaml
 git add charts/
 git commit -m "feat: add nodeSelector configuration"
 git push origin main

@@ -254,9 +254,9 @@ type StorageBackend interface {
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: externalsources.source.example.com
+  name: externalsources.source.flux.oddkin.co
 spec:
-  group: source.example.com
+  group: source.flux.oddkin.co
   versions:
   - name: v1alpha1
     schema:

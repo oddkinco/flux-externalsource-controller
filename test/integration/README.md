@@ -10,7 +10,7 @@ The integration test environment includes:
 - **Flux installation**: GitOps toolkit for consuming ExternalArtifact resources
 - **Test API server**: HTTP server providing various endpoints for testing
 - **MinIO**: S3-compatible storage for artifact storage testing
-- **fx-controller**: The ExternalSource Controller being tested
+- **flux-externalsource-controller**: The ExternalSource Controller being tested
 
 ## Architecture
 
@@ -20,7 +20,7 @@ The integration test environment includes:
 │                 │    │   Server        │    │   (S3 storage)  │
 │ - Kubernetes    │    │                 │    │                 │
 │ - Flux          │    │ - /api/v1/config│    │ - Artifact      │
-│ - fx-controller │    │ - /api/v1/users │    │   storage       │
+│ - flux-external-controller │    │ - /api/v1/users │    │   storage       │
 │                 │    │ - /health       │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
@@ -175,7 +175,7 @@ The test environment supports several configuration options:
 
 2. **Check controller logs:**
    ```bash
-   kubectl logs -n fx-system deployment/fx-controller-manager -f
+   kubectl logs -n fx-system deployment/flux-external-controller-manager -f
    ```
 
 3. **Inspect ExternalSource status:**

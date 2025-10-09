@@ -36,11 +36,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	sourcev1alpha1 "github.com/example/externalsource-controller/api/v1alpha1"
-	"github.com/example/externalsource-controller/internal/artifact"
-	"github.com/example/externalsource-controller/internal/config"
-	"github.com/example/externalsource-controller/internal/generator"
-	"github.com/example/externalsource-controller/internal/transformer"
+	sourcev1alpha1 "github.com/oddkin/flux-externalsource-controller/api/v1alpha1"
+	"github.com/oddkin/flux-externalsource-controller/internal/artifact"
+	"github.com/oddkin/flux-externalsource-controller/internal/config"
+	"github.com/oddkin/flux-externalsource-controller/internal/generator"
+	"github.com/oddkin/flux-externalsource-controller/internal/transformer"
 )
 
 // createTestConfig creates a default configuration for testing

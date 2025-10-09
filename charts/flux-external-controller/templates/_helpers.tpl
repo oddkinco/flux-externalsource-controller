@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "fx-controller.name" -}}
+{{- define "flux-external-controller.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "fx-controller.fullname" -}}
+{{- define "flux-external-controller.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -26,16 +26,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "fx-controller.chart" -}}
+{{- define "flux-external-controller.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "fx-controller.labels" -}}
-helm.sh/chart: {{ include "fx-controller.chart" . }}
-{{ include "fx-controller.selectorLabels" . }}
+{{- define "flux-external-controller.labels" -}}
+helm.sh/chart: {{ include "flux-external-controller.chart" . }}
+{{ include "flux-external-controller.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -48,17 +48,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "fx-controller.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "fx-controller.name" . }}
+{{- define "flux-external-controller.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "flux-external-controller.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "fx-controller.serviceAccountName" -}}
+{{- define "flux-external-controller.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (printf "%s-manager" (include "fx-controller.fullname" .)) .Values.serviceAccount.name }}
+{{- default (printf "%s-manager" (include "flux-external-controller.fullname" .)) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -67,55 +67,55 @@ Create the name of the service account to use
 {{/*
 Create the name of the cluster role to use
 */}}
-{{- define "fx-controller.clusterRoleName" -}}
-{{- printf "%s-manager-role" (include "fx-controller.fullname" .) }}
+{{- define "flux-external-controller.clusterRoleName" -}}
+{{- printf "%s-manager-role" (include "flux-external-controller.fullname" .) }}
 {{- end }}
 
 {{/*
 Create the name of the cluster role binding to use
 */}}
-{{- define "fx-controller.clusterRoleBindingName" -}}
-{{- printf "%s-manager-rolebinding" (include "fx-controller.fullname" .) }}
+{{- define "flux-external-controller.clusterRoleBindingName" -}}
+{{- printf "%s-manager-rolebinding" (include "flux-external-controller.fullname" .) }}
 {{- end }}
 
 {{/*
 Create the name of the leader election role to use
 */}}
-{{- define "fx-controller.leaderElectionRoleName" -}}
-{{- printf "%s-leader-election-role" (include "fx-controller.fullname" .) }}
+{{- define "flux-external-controller.leaderElectionRoleName" -}}
+{{- printf "%s-leader-election-role" (include "flux-external-controller.fullname" .) }}
 {{- end }}
 
 {{/*
 Create the name of the leader election role binding to use
 */}}
-{{- define "fx-controller.leaderElectionRoleBindingName" -}}
-{{- printf "%s-leader-election-rolebinding" (include "fx-controller.fullname" .) }}
+{{- define "flux-external-controller.leaderElectionRoleBindingName" -}}
+{{- printf "%s-leader-election-rolebinding" (include "flux-external-controller.fullname" .) }}
 {{- end }}
 
 {{/*
 Create the name of the metrics service to use
 */}}
-{{- define "fx-controller.metricsServiceName" -}}
-{{- printf "%s-metrics" (include "fx-controller.fullname" .) }}
+{{- define "flux-external-controller.metricsServiceName" -}}
+{{- printf "%s-metrics" (include "flux-external-controller.fullname" .) }}
 {{- end }}
 
 {{/*
 Create the name of the webhook service to use
 */}}
-{{- define "fx-controller.webhookServiceName" -}}
-{{- printf "%s-webhook-service" (include "fx-controller.fullname" .) }}
+{{- define "flux-external-controller.webhookServiceName" -}}
+{{- printf "%s-webhook-service" (include "flux-external-controller.fullname" .) }}
 {{- end }}
 
 {{/*
 Create the name of the webhook certificate to use
 */}}
-{{- define "fx-controller.webhookCertificateName" -}}
-{{- printf "%s-serving-cert" (include "fx-controller.fullname" .) }}
+{{- define "flux-external-controller.webhookCertificateName" -}}
+{{- printf "%s-serving-cert" (include "flux-external-controller.fullname" .) }}
 {{- end }}
 
 {{/*
 Create the name of the webhook issuer to use
 */}}
-{{- define "fx-controller.webhookIssuerName" -}}
-{{- printf "%s-selfsigned-issuer" (include "fx-controller.fullname" .) }}
+{{- define "flux-external-controller.webhookIssuerName" -}}
+{{- printf "%s-selfsigned-issuer" (include "flux-external-controller.fullname" .) }}
 {{- end }}

@@ -94,7 +94,7 @@ coverage-summary: ## Show coverage summary from existing cover.out.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
-KIND_CLUSTER ?= fx-controller-e2e
+KIND_CLUSTER ?= flux-external-controller-e2e
 
 .PHONY: test-e2e
 test-e2e: ## Run end-to-end tests with Kind cluster
@@ -161,10 +161,10 @@ PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name fx-controller-builder
-	$(CONTAINER_TOOL) buildx use fx-controller-builder
+	- $(CONTAINER_TOOL) buildx create --name flux-external-controller-builder
+	$(CONTAINER_TOOL) buildx use flux-external-controller-builder
 	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm fx-controller-builder
+	- $(CONTAINER_TOOL) buildx rm flux-external-controller-builder
 	rm Dockerfile.cross
 
 .PHONY: build-installer

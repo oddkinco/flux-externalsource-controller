@@ -5,7 +5,7 @@ metadata:
   namespace: system
   labels:
     control-plane: controller-manager
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     app.kubernetes.io/managed-by: kustomize
 data:
   # Storage configuration

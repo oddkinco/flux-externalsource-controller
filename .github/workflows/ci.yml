@@ -147,11 +147,11 @@ jobs:
 
     - name: Lint Helm chart
       run: |
-        helm lint charts/fx-controller
+        helm lint charts/flux-external-controller
 
     - name: Validate Helm chart templates
       run: |
-        helm template fx-controller charts/fx-controller --debug
+        helm template flux-external-controller charts/flux-external-controller --debug
 
     - name: Run Helm chart tests
       run: |
@@ -161,7 +161,7 @@ jobs:
         sudo mv ct /usr/local/bin/
         
         # Run chart tests
-        ct lint --charts charts/fx-controller
+        ct lint --charts charts/flux-external-controller
 
   integration-test:
     runs-on: ubuntu-latest

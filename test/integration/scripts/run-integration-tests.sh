@@ -75,9 +75,9 @@ install_flux() {
     log_success "Flux installation completed"
 }
 
-# Deploy fx-controller
-deploy_fx_controller() {
-    log_info "Deploying fx-controller..."
+# Deploy flux-external-controller
+deploy_flux_external_controller() {
+    log_info "Deploying flux-external-controller..."
     
     # Create namespace
     kubectl create namespace fx-system --dry-run=client -o yaml | kubectl apply -f -
@@ -86,11 +86,11 @@ deploy_fx_controller() {
     kubectl apply -f /test-cases/crds/
     
     # Apply RBAC and deployment
-    kubectl apply -f /test-cases/fx-controller/
+    kubectl apply -f /test-cases/flux-external-controller/
     
     # Wait for deployment to be ready
-    kubectl wait --for=condition=Available deployment/fx-controller-manager -n fx-system --timeout=300s
-    log_success "fx-controller deployment completed"
+    kubectl wait --for=condition=Available deployment/flux-external-controller-manager -n fx-system --timeout=300s
+    log_success "flux-external-controller deployment completed"
 }
 
 # Setup test webserver service
@@ -194,7 +194,7 @@ run_basic_http_test() {
     log_info "Creating basic HTTP ExternalSource..."
     
     kubectl apply -f - <<EOF
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: basic-http-test
@@ -235,7 +235,7 @@ run_authenticated_http_test() {
         --dry-run=client -o yaml | kubectl apply -f -
     
     kubectl apply -f - <<EOF
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: auth-http-test
@@ -271,7 +271,7 @@ run_transformation_test() {
     log_info "Creating ExternalSource with transformation..."
     
     kubectl apply -f - <<EOF
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: transform-test
@@ -416,7 +416,7 @@ main() {
     # Run setup steps
     wait_for_cluster
     install_flux
-    deploy_fx_controller
+    deploy_flux_external_controller
     setup_test_services
     
     # Run tests

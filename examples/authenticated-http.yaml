@@ -29,13 +29,13 @@ data:
   Authorization: QmVhcmVyIHlvdXItYXBpLXRva2VuLWhlcmU=
 
 ---
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: secure-api-config
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: authenticated-http
 spec:
   # Check for updates every 5 minutes
@@ -66,7 +66,7 @@ spec:
 #    kubectl describe externalsource secure-api-config
 #
 # 3. Check controller logs for detailed error messages:
-#    kubectl logs -n fx-system deployment/fx-controller-manager
+#    kubectl logs -n flux-externalsource-controller-system deployment/flux-externalsource-controller-manager
 #
 # Common authentication headers:
 # - Authorization: "Bearer token" or "Basic base64(user:pass)"

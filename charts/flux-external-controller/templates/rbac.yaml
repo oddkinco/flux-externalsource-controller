@@ -1,15 +1,10 @@
-# RBAC configuration for fx-controller
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: fx-controller-manager
-  namespace: fx-system
-
----
+{{- if .Values.rbac.create -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: fx-controller-manager-role
+  name: {{ include "flux-external-controller.clusterRoleName" . }}
+  labels:
+    {{- include "flux-external-controller.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - ""
@@ -21,7 +16,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - source.example.com
+  - source.flux.oddkin.co
   resources:
   - externalsources
   - externalartifacts
@@ -34,14 +29,14 @@ rules:
   - update
   - watch
 - apiGroups:
-  - source.example.com
+  - source.flux.oddkin.co
   resources:
   - externalsources/finalizers
   - externalartifacts/finalizers
   verbs:
   - update
 - apiGroups:
-  - source.example.com
+  - source.flux.oddkin.co
   resources:
   - externalsources/status
   - externalartifacts/status
@@ -54,22 +49,26 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: fx-controller-manager-rolebinding
+  name: {{ include "flux-external-controller.clusterRoleBindingName" . }}
+  labels:
+    {{- include "flux-external-controller.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: fx-controller-manager-role
+  name: {{ include "flux-external-controller.clusterRoleName" . }}
 subjects:
 - kind: ServiceAccount
-  name: fx-controller-manager
-  namespace: fx-system
+  name: {{ include "flux-external-controller.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: fx-controller-leader-election-role
-  namespace: fx-system
+  name: {{ include "flux-external-controller.leaderElectionRoleName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flux-external-controller.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - ""
@@ -100,13 +99,16 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: fx-controller-leader-election-rolebinding
-  namespace: fx-system
+  name: {{ include "flux-external-controller.leaderElectionRoleBindingName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flux-external-controller.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: fx-controller-leader-election-role
+  name: {{ include "flux-external-controller.leaderElectionRoleName" . }}
 subjects:
 - kind: ServiceAccount
-  name: fx-controller-manager
-  namespace: fx-system
+  name: {{ include "flux-external-controller.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

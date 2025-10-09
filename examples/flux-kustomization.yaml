@@ -28,7 +28,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m
-  url: https://github.com/example/app-manifests
+  url: https://github.com/oddkin/app-manifests
   ref:
     branch: main
 
@@ -62,7 +62,7 @@ spec:
 
 ---
 # Environment-specific configuration with ExternalArtifact
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: staging-config
@@ -78,7 +78,7 @@ spec:
       url: https://config-api.company.com/environments/staging/config
 
 ---
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: production-config
@@ -157,7 +157,7 @@ spec:
 
 ---
 # Secret management with ExternalArtifact
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: app-secrets

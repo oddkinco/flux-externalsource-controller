@@ -37,20 +37,20 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/example/externalsource-controller/test/utils"
+	"github.com/oddkin/flux-externalsource-controller/test/utils"
 )
 
 // namespace where the project is deployed in
-const namespace = "fx-controller-system"
+const namespace = "flux-externalsource-controller-system"
 
 // serviceAccountName created for the project
-const serviceAccountName = "fx-controller-controller-manager"
+const serviceAccountName = "flux-externalsource-controller-controller-manager"
 
 // metricsServiceName is the name of the metrics service of the project
-const metricsServiceName = "fx-controller-controller-manager-metrics-service"
+const metricsServiceName = "flux-externalsource-controller-controller-manager-metrics-service"
 
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
-const metricsRoleBindingName = "fx-controller-metrics-binding"
+const metricsRoleBindingName = "flux-externalsource-controller-metrics-binding"
 
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
@@ -183,7 +183,7 @@ var _ = Describe("Manager", Ordered, func() {
 		It("should ensure the metrics endpoint is serving metrics", func() {
 			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
 			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,
-				"--clusterrole=fx-controller-metrics-reader",
+				"--clusterrole=flux-externalsource-controller-metrics-reader",
 				fmt.Sprintf("--serviceaccount=%s:%s", namespace, serviceAccountName),
 			)
 			_, err := utils.Run(cmd)
@@ -337,7 +337,7 @@ spec:
 
 			By("creating an ExternalSource resource")
 			externalSourceManifest := `
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: test-external-source
@@ -456,7 +456,7 @@ spec:
 
 			By("creating an ExternalSource with CEL transformation")
 			externalSourceManifest := `
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: test-transform-source
@@ -510,7 +510,7 @@ spec:
 		It("should handle ExternalSource error scenarios gracefully", func() {
 			By("creating an ExternalSource with invalid URL")
 			invalidSourceManifest := `
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: test-invalid-source

@@ -12,13 +12,13 @@
 #   kubectl apply -f data-transformation.yaml
 #   kubectl get externalsource transformed-config -w
 
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: transformed-config
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: data-transformation
 spec:
   # Check for updates every 10 minutes
@@ -56,13 +56,13 @@ spec:
 
 ---
 # Example 2: Extract specific fields from a complex API response
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: filtered-config
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: field-extraction
 spec:
   interval: 15m
@@ -92,13 +92,13 @@ spec:
 
 ---
 # Example 3: Conditional transformation based on data content
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: conditional-config
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: conditional-transformation
 spec:
   interval: 20m
@@ -136,13 +136,13 @@ spec:
 
 ---
 # Example 4: Array processing and filtering
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: service-discovery
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: array-processing
 spec:
   interval: 5m

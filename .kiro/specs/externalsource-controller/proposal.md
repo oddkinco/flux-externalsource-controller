@@ -27,7 +27,7 @@ The controller will be implemented as a dedicated Kubernetes operator using the 
 
 The controller introduces the ExternalSource CRD, which will be the primary interface for users.
 
-#### **Kind: ExternalSource (source.example.com/v1alpha1)**
+#### **Kind: ExternalSource (source.flux.oddkin.co/v1alpha1)**
 
 **spec**
 

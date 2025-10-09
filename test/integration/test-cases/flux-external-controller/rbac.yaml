@@ -1,10 +1,15 @@
-{{- if .Values.rbac.create -}}
+# RBAC configuration for flux-externalsource-controller
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-externalsource-controller-manager
+  namespace: flux-externalsource-controller-system
+
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "fx-controller.clusterRoleName" . }}
-  labels:
-    {{- include "fx-controller.labels" . | nindent 4 }}
+  name: flux-externalsource-controller-manager-role
 rules:
 - apiGroups:
   - ""
@@ -16,7 +21,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - source.example.com
+  - source.flux.oddkin.co
   resources:
   - externalsources
   - externalartifacts
@@ -29,14 +34,14 @@ rules:
   - update
   - watch
 - apiGroups:
-  - source.example.com
+  - source.flux.oddkin.co
   resources:
   - externalsources/finalizers
   - externalartifacts/finalizers
   verbs:
   - update
 - apiGroups:
-  - source.example.com
+  - source.flux.oddkin.co
   resources:
   - externalsources/status
   - externalartifacts/status
@@ -49,26 +54,22 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "fx-controller.clusterRoleBindingName" . }}
-  labels:
-    {{- include "fx-controller.labels" . | nindent 4 }}
+  name: flux-externalsource-controller-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "fx-controller.clusterRoleName" . }}
+  name: flux-externalsource-controller-manager-role
 subjects:
 - kind: ServiceAccount
-  name: {{ include "fx-controller.serviceAccountName" . }}
-  namespace: {{ .Release.Namespace }}
+  name: flux-externalsource-controller-manager
+  namespace: flux-externalsource-controller-system
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "fx-controller.leaderElectionRoleName" . }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "fx-controller.labels" . | nindent 4 }}
+  name: flux-externalsource-controller-leader-election-role
+  namespace: flux-externalsource-controller-system
 rules:
 - apiGroups:
   - ""
@@ -99,16 +100,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "fx-controller.leaderElectionRoleBindingName" . }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "fx-controller.labels" . | nindent 4 }}
+  name: flux-externalsource-controller-leader-election-rolebinding
+  namespace: flux-externalsource-controller-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "fx-controller.leaderElectionRoleName" . }}
+  name: flux-externalsource-controller-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: {{ include "fx-controller.serviceAccountName" . }}
-  namespace: {{ .Release.Namespace }}
-{{- end }}
+  name: flux-externalsource-controller-manager
+  namespace: flux-externalsource-controller-system

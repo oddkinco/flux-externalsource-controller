@@ -1,7 +1,7 @@
-# This rule is not used by the project fx-controller itself.
+# This rule is not used by the project flux-externalsource-controller itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants permissions to create, update, and delete resources within the source.example.com.
+# Grants permissions to create, update, and delete resources within the source.flux.oddkin.co.
 # This role is intended for users who need to manage these resources
 # but should not control RBAC or manage permissions for others.
 
@@ -9,12 +9,12 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     app.kubernetes.io/managed-by: kustomize
   name: externalartifact-editor-role
 rules:
 - apiGroups:
-  - source.example.com
+  - source.flux.oddkin.co
   resources:
   - externalartifacts
   verbs:
@@ -26,7 +26,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - source.example.com
+  - source.flux.oddkin.co
   resources:
   - externalartifacts/status
   verbs:

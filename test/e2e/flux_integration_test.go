@@ -34,7 +34,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/example/externalsource-controller/test/utils"
+	"github.com/oddkin/flux-externalsource-controller/test/utils"
 )
 
 var _ = Describe("Flux Integration", Ordered, func() {
@@ -129,7 +129,7 @@ spec:
 
 			By("creating an ExternalSource to fetch configuration")
 			externalSourceManifest := `
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: app-config-source
@@ -355,7 +355,7 @@ spec:
 
 			By("creating multiple ExternalSources")
 			multiSourceManifest := `
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: service1-config
@@ -368,7 +368,7 @@ spec:
       url: http://test-server1.` + testNamespace + `.svc.cluster.local/data.json
   destinationPath: service1.json
 ---
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: service2-config

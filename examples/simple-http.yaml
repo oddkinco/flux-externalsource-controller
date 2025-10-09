@@ -12,13 +12,13 @@
 #   kubectl apply -f simple-http.yaml
 #   kubectl get externalsource simple-config -w
 
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: simple-config
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: simple-http
 spec:
   # Check for updates every 10 minutes

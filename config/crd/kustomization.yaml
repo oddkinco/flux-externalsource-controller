@@ -2,8 +2,8 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/source.example.com_externalsources.yaml
-- bases/source.example.com_externalartifacts.yaml
+- bases/source.flux.oddkin.co_externalsources.yaml
+- bases/source.flux.oddkin.co_externalartifacts.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

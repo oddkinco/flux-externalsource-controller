@@ -159,10 +159,10 @@
     - Use docker k0s image to run a minimal kubernetes cluster
     - Bootstrap Flux on the cluster with "flux install"
     - Install a simple webserver on the cluster that can respond to HTTP requests
-    - Deploy fx-controller to the cluster in the flux-system namespace
+    - Deploy flux-externalsource-controller to the cluster in the flux-system namespace
     - Install sample ExternalSource resources
     - Verify that ExternalArtifact resources are created, and can be retrieved
 
   - [x] 10.4 Create github workflows for deployment artifacts for tagged releases
-    - Create a helm chart for deploying fx-controller
+    - Create a helm chart for deploying flux-externalsource-controller
     - Add github workflows that build tagged docker and helm releases and push to ghcr.io package repositories

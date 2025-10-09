@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: externalartifacts.source.example.com
+  name: externalartifacts.source.flux.oddkin.co
 spec:
-  group: source.example.com
+  group: source.flux.oddkin.co
   names:
     kind: ExternalArtifact
     listKind: ExternalArtifactList

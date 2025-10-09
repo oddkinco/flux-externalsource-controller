@@ -29,13 +29,13 @@ data:
   ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCi4uLiAoWW91ciBDQSBjZXJ0aWZpY2F0ZSBjb250ZW50IGhlcmUpIC4uLgotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0t
 
 ---
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: internal-api-config
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: tls-custom-ca
 spec:
   # Check for updates every 15 minutes
@@ -63,13 +63,13 @@ spec:
 ---
 # Alternative: Skip TLS verification (NOT RECOMMENDED for production)
 # Only use this for development or when you cannot obtain the proper CA certificate
-apiVersion: source.example.com/v1alpha1
+apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
   name: insecure-api-config
   namespace: default
   labels:
-    app.kubernetes.io/name: fx-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     example: insecure-tls
 spec:
   interval: 30m

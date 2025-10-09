@@ -73,15 +73,15 @@ debug-cluster: ## Get cluster info for debugging
 	@echo "=== Service Status ==="
 	docker exec k0s-cluster k0s kubectl get services --all-namespaces || true
 
-debug-fx-controller: ## Debug fx-controller deployment
-	@echo "=== fx-controller Deployment ==="
+debug-flux-external-controller: ## Debug flux-external-controller deployment
+	@echo "=== flux-external-controller Deployment ==="
 	docker exec k0s-cluster k0s kubectl get deployment -n fx-system || true
 	@echo ""
-	@echo "=== fx-controller Pods ==="
+	@echo "=== flux-external-controller Pods ==="
 	docker exec k0s-cluster k0s kubectl get pods -n fx-system || true
 	@echo ""
-	@echo "=== fx-controller Logs ==="
-	docker exec k0s-cluster k0s kubectl logs -n fx-system deployment/fx-controller-manager --tail=50 || true
+	@echo "=== flux-external-controller Logs ==="
+	docker exec k0s-cluster k0s kubectl logs -n fx-system deployment/flux-external-controller-manager --tail=50 || true
 
 debug-flux: ## Debug Flux installation
 	@echo "=== Flux Pods ==="
@@ -131,7 +131,7 @@ wait-for-api: ## Wait for test API to be ready
 # Example usage targets
 example-basic: ## Create a basic ExternalSource example
 	docker exec k0s-cluster k0s kubectl apply -f - <<< '\
-	apiVersion: source.example.com/v1alpha1\
+	apiVersion: source.flux.oddkin.co/v1alpha1\
 	kind: ExternalSource\
 	metadata:\
 	  name: example-basic\
@@ -147,7 +147,7 @@ example-basic: ## Create a basic ExternalSource example
 example-auth: ## Create an authenticated ExternalSource example
 	docker exec k0s-cluster k0s kubectl create secret generic example-auth --from-literal=Authorization="Bearer test-token-123" --dry-run=client -o yaml | docker exec -i k0s-cluster k0s kubectl apply -f -
 	docker exec k0s-cluster k0s kubectl apply -f - <<< '\
-	apiVersion: source.example.com/v1alpha1\
+	apiVersion: source.flux.oddkin.co/v1alpha1\
 	kind: ExternalSource\
 	metadata:\
 	  name: example-auth\
@@ -164,7 +164,7 @@ example-auth: ## Create an authenticated ExternalSource example
 
 example-transform: ## Create a transformation ExternalSource example
 	docker exec k0s-cluster k0s kubectl apply -f - <<< '\
-	apiVersion: source.example.com/v1alpha1\
+	apiVersion: source.flux.oddkin.co/v1alpha1\
 	kind: ExternalSource\
 	metadata:\
 	  name: example-transform\

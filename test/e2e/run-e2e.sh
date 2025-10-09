@@ -8,8 +8,8 @@ set -euo pipefail
 # Configuration
 CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-externalsource-controller:e2e}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-NAMESPACE="${NAMESPACE:-fx-controller-system}"
-KIND_CLUSTER="${KIND_CLUSTER:-fx-controller-e2e}"
+NAMESPACE="${NAMESPACE:-flux-externalsource-controller-system}"
+KIND_CLUSTER="${KIND_CLUSTER:-flux-externalsource-controller-e2e}"
 KIND_BINARY="${KIND:-kind}"
 
 # Colors for output
