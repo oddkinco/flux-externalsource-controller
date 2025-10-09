@@ -25,6 +25,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1295,3 +1296,693 @@ func (m *MockMetricsRecorder) DecActiveReconciliations(namespace, name string) {
 		Name:      name,
 	})
 }
+
+// Tests for error handling and resilience features
+var _ = Describe("ExternalSource Controller Error Handling and Resilience", func() {
+	Context("Exponential backoff retry logic", func() {
+		var (
+			ctx        context.Context
+			reconciler *ExternalSourceReconciler
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			reconciler = &ExternalSourceReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+			_ = ctx // Prevent unused variable error
+		})
+
+		It("should classify errors correctly", func() {
+			By("classifying transient errors")
+			transientErr := fmt.Errorf("network timeout")
+			Expect(reconciler.classifyError(transientErr)).To(Equal(TransientError))
+
+			networkErr := fmt.Errorf("connection refused")
+			Expect(reconciler.classifyError(networkErr)).To(Equal(TransientError))
+
+			By("classifying configuration errors")
+			configErr := fmt.Errorf("invalid interval format")
+			Expect(reconciler.classifyError(configErr)).To(Equal(ConfigurationError))
+
+			unsupportedErr := fmt.Errorf("unsupported generator type: invalid")
+			Expect(reconciler.classifyError(unsupportedErr)).To(Equal(ConfigurationError))
+
+			By("classifying permanent errors")
+			notFoundErr := fmt.Errorf("404 not found")
+			Expect(reconciler.classifyError(notFoundErr)).To(Equal(PermanentError))
+
+			unauthorizedErr := fmt.Errorf("401 unauthorized")
+			Expect(reconciler.classifyError(unauthorizedErr)).To(Equal(PermanentError))
+
+			forbiddenErr := fmt.Errorf("403 forbidden")
+			Expect(reconciler.classifyError(forbiddenErr)).To(Equal(PermanentError))
+		})
+
+		It("should calculate retry delay with exponential backoff", func() {
+			externalSource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-backoff",
+					Namespace: "default",
+				},
+			}
+
+			By("calculating delay for first retry")
+			transientErr := fmt.Errorf("network timeout")
+			delay := reconciler.calculateRetryDelay(externalSource, transientErr)
+			Expect(delay).To(BeNumerically(">=", baseRetryDelay))
+			Expect(delay).To(BeNumerically("<=", baseRetryDelay*2)) // With jitter
+
+			By("calculating delay after multiple retries")
+			// Simulate multiple retries
+			for i := 0; i < 3; i++ {
+				reconciler.incrementRetryCount(externalSource, transientErr)
+			}
+			
+			delay = reconciler.calculateRetryDelay(externalSource, transientErr)
+			expectedDelay := time.Duration(float64(baseRetryDelay) * math.Pow(2, 3)) // 2^3 = 8
+			Expect(delay).To(BeNumerically(">=", expectedDelay/2))   // Account for jitter
+			Expect(delay).To(BeNumerically("<=", expectedDelay*2))   // Account for jitter
+
+			By("returning zero delay for configuration errors")
+			configErr := fmt.Errorf("invalid interval format")
+			delay = reconciler.calculateRetryDelay(externalSource, configErr)
+			Expect(delay).To(Equal(time.Duration(0)))
+
+			By("returning zero delay for permanent errors")
+			permErr := fmt.Errorf("404 not found")
+			delay = reconciler.calculateRetryDelay(externalSource, permErr)
+			Expect(delay).To(Equal(time.Duration(0)))
+
+			By("returning zero delay after max retries")
+			// Simulate max retries
+			for i := 3; i < maxRetryAttempts; i++ {
+				reconciler.incrementRetryCount(externalSource, transientErr)
+			}
+			
+			delay = reconciler.calculateRetryDelay(externalSource, transientErr)
+			Expect(delay).To(Equal(time.Duration(0)))
+		})
+
+		It("should track retry count and failure information", func() {
+			externalSource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-retry-tracking",
+					Namespace: "default",
+				},
+			}
+
+			By("starting with zero retry count")
+			Expect(reconciler.getRetryCount(externalSource)).To(Equal(0))
+
+			By("incrementing retry count and tracking failure")
+			testErr := fmt.Errorf("test error message")
+			reconciler.incrementRetryCount(externalSource, testErr)
+			
+			Expect(reconciler.getRetryCount(externalSource)).To(Equal(1))
+			Expect(externalSource.Annotations).To(HaveKey(retryCountAnnotation))
+			Expect(externalSource.Annotations).To(HaveKey(lastFailureAnnotation))
+			Expect(externalSource.Annotations).To(HaveKey(backoffStartAnnotation))
+			Expect(externalSource.Annotations[lastFailureAnnotation]).To(Equal("test error message"))
+
+			By("incrementing retry count multiple times")
+			reconciler.incrementRetryCount(externalSource, testErr)
+			reconciler.incrementRetryCount(externalSource, testErr)
+			
+			Expect(reconciler.getRetryCount(externalSource)).To(Equal(3))
+
+			By("clearing retry count")
+			reconciler.clearRetryCount(externalSource)
+			
+			Expect(reconciler.getRetryCount(externalSource)).To(Equal(0))
+			Expect(externalSource.Annotations).NotTo(HaveKey(retryCountAnnotation))
+			Expect(externalSource.Annotations).NotTo(HaveKey(lastFailureAnnotation))
+			Expect(externalSource.Annotations).NotTo(HaveKey(backoffStartAnnotation))
+		})
+
+		It("should calculate backoff duration correctly", func() {
+			externalSource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-backoff-duration",
+					Namespace: "default",
+				},
+			}
+
+			By("returning zero duration when no backoff started")
+			Expect(reconciler.getBackoffDuration(externalSource)).To(Equal(time.Duration(0)))
+
+			By("calculating duration after backoff starts")
+			testErr := fmt.Errorf("test error")
+			reconciler.incrementRetryCount(externalSource, testErr)
+			
+			time.Sleep(100 * time.Millisecond) // Small delay
+			duration := reconciler.getBackoffDuration(externalSource)
+			Expect(duration).To(BeNumerically(">=", 100*time.Millisecond))
+			Expect(duration).To(BeNumerically("<=", 1*time.Second))
+		})
+
+		It("should reset retry count on spec changes", func() {
+			externalSource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-retry-reset",
+					Namespace:  "default",
+					Generation: 1,
+				},
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					ObservedGeneration: 1,
+				},
+			}
+
+			By("not resetting when generations match")
+			Expect(reconciler.shouldResetRetryCount(externalSource)).To(BeFalse())
+
+			By("resetting when spec has changed")
+			externalSource.Generation = 2 // Simulate spec change
+			Expect(reconciler.shouldResetRetryCount(externalSource)).To(BeTrue())
+		})
+	})
+
+	Context("Graceful degradation and recovery", func() {
+		var (
+			ctx                 context.Context
+			mockFactory         *MockGeneratorFactory
+			mockTransformer     *MockTransformer
+			mockArtifactManager *MockArtifactManager
+			reconciler          *ExternalSourceReconciler
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			mockFactory = NewMockGeneratorFactory()
+			mockTransformer = &MockTransformer{}
+			mockArtifactManager = &MockArtifactManager{}
+
+			reconciler = &ExternalSourceReconciler{
+				Client:           k8sClient,
+				Scheme:           k8sClient.Scheme(),
+				GeneratorFactory: mockFactory,
+				Transformer:      mockTransformer,
+				ArtifactManager:  mockArtifactManager,
+			}
+
+			// Register mock HTTP generator
+			Expect(mockFactory.RegisterGenerator("http", func() generator.SourceGenerator {
+				return &MockSourceGenerator{}
+			})).To(Succeed())
+		})
+
+		It("should maintain last successful artifact during transient failures", func() {
+			resourceName := "test-graceful-degradation"
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			By("creating an ExternalSource with existing artifact")
+			resource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Artifact: &sourcev1alpha1.ArtifactMetadata{
+						URL:            "https://storage.example.com/previous/artifact",
+						Revision:       "previous-revision",
+						LastUpdateTime: metav1.Now(),
+						Metadata:       map[string]string{"size": "100"},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("setting up generator to fail with transient error")
+			mockFactory.CreateGeneratorFunc = func(generatorType string) (generator.SourceGenerator, error) {
+				return &MockSourceGenerator{
+					GenerateFunc: func(ctx context.Context, config generator.GeneratorConfig) (*generator.SourceData, error) {
+						return nil, fmt.Errorf("network timeout") // Transient error
+					},
+				}, nil
+			}
+
+			By("performing reconciliation")
+			// First reconcile adds finalizer
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second reconcile should fail but maintain previous artifact
+			result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+			By("verifying previous artifact is maintained")
+			var updatedResource sourcev1alpha1.ExternalSource
+			Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedResource)).To(Succeed())
+
+			Expect(updatedResource.Status.Artifact).NotTo(BeNil())
+			Expect(updatedResource.Status.Artifact.URL).To(Equal("https://storage.example.com/previous/artifact"))
+			Expect(updatedResource.Status.Artifact.Revision).To(Equal("previous-revision"))
+
+			readyCondition := findCondition(updatedResource.Status.Conditions, ReadyCondition)
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(readyCondition.Message).To(ContainSubstring("Last successful artifact maintained"))
+
+			By("cleaning up the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+
+		It("should detect and perform controller restart recovery", func() {
+			externalSource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-recovery",
+					Namespace: "default",
+				},
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   FetchingCondition,
+							Status: metav1.ConditionTrue,
+							Reason: ProgressingReason,
+						},
+					},
+				},
+			}
+
+			By("detecting need for recovery with in-progress conditions")
+			Expect(reconciler.needsRecovery(externalSource)).To(BeTrue())
+
+			By("not needing recovery with clean state")
+			externalSource.Status.Conditions = []metav1.Condition{
+				{
+					Type:   ReadyCondition,
+					Status: metav1.ConditionTrue,
+					Reason: SucceededReason,
+				},
+			}
+			Expect(reconciler.needsRecovery(externalSource)).To(BeFalse())
+
+			By("needing recovery when stalled but has artifact")
+			externalSource.Status.Conditions = []metav1.Condition{
+				{
+					Type:   StalledCondition,
+					Status: metav1.ConditionTrue,
+					Reason: FailedReason,
+				},
+			}
+			externalSource.Status.Artifact = &sourcev1alpha1.ArtifactMetadata{
+				URL:      "https://storage.example.com/test/artifact",
+				Revision: "test-revision",
+			}
+			Expect(reconciler.needsRecovery(externalSource)).To(BeTrue())
+		})
+
+		It("should perform recovery correctly", func() {
+			externalSource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-perform-recovery",
+					Namespace: "default",
+				},
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   FetchingCondition,
+							Status: metav1.ConditionTrue,
+							Reason: ProgressingReason,
+						},
+						{
+							Type:   StalledCondition,
+							Status: metav1.ConditionTrue,
+							Reason: FailedReason,
+						},
+					},
+					Artifact: &sourcev1alpha1.ArtifactMetadata{
+						URL:      "https://storage.example.com/test/artifact",
+						Revision: "test-revision",
+						Metadata: map[string]string{"size": "200"},
+					},
+				},
+			}
+
+			By("performing recovery")
+			reconciler.performRecovery(ctx, externalSource)
+
+			By("verifying progress conditions are cleared")
+			fetchingCondition := findCondition(externalSource.Status.Conditions, FetchingCondition)
+			Expect(fetchingCondition).To(BeNil())
+
+			By("verifying stalled condition is cleared")
+			stalledCondition := findCondition(externalSource.Status.Conditions, StalledCondition)
+			Expect(stalledCondition).To(BeNil())
+
+			By("verifying ready condition is set")
+			readyCondition := findCondition(externalSource.Status.Conditions, ReadyCondition)
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(readyCondition.Reason).To(Equal(SucceededReason))
+			Expect(readyCondition.Message).To(ContainSubstring("Recovered from controller restart"))
+		})
+
+		It("should handle recovery without previous artifact", func() {
+			externalSource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-recovery-no-artifact",
+					Namespace: "default",
+				},
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   TransformingCondition,
+							Status: metav1.ConditionTrue,
+							Reason: ProgressingReason,
+						},
+					},
+				},
+			}
+
+			By("performing recovery without artifact")
+			reconciler.performRecovery(ctx, externalSource)
+
+			By("verifying ready condition indicates fresh start")
+			readyCondition := findCondition(externalSource.Status.Conditions, ReadyCondition)
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(readyCondition.Reason).To(Equal(ProgressingReason))
+			Expect(readyCondition.Message).To(ContainSubstring("Starting fresh reconciliation"))
+		})
+	})
+
+	Context("Error scenario integration tests", func() {
+		var (
+			ctx                 context.Context
+			mockFactory         *MockGeneratorFactory
+			mockTransformer     *MockTransformer
+			mockArtifactManager *MockArtifactManager
+			reconciler          *ExternalSourceReconciler
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			mockFactory = NewMockGeneratorFactory()
+			mockTransformer = &MockTransformer{}
+			mockArtifactManager = &MockArtifactManager{}
+
+			reconciler = &ExternalSourceReconciler{
+				Client:           k8sClient,
+				Scheme:           k8sClient.Scheme(),
+				GeneratorFactory: mockFactory,
+				Transformer:      mockTransformer,
+				ArtifactManager:  mockArtifactManager,
+			}
+		})
+
+		It("should handle multiple consecutive failures with exponential backoff", func() {
+			resourceName := "test-multiple-failures"
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			By("setting up generator to always fail")
+			Expect(mockFactory.RegisterGenerator("http", func() generator.SourceGenerator {
+				return &MockSourceGenerator{
+					GenerateFunc: func(ctx context.Context, config generator.GeneratorConfig) (*generator.SourceData, error) {
+						return nil, fmt.Errorf("persistent network error")
+					},
+				}
+			})).To(Succeed())
+
+			By("creating an ExternalSource resource")
+			resource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			var previousDelay time.Duration
+
+			By("performing multiple reconciliations and verifying exponential backoff")
+			for i := 0; i < 5; i++ {
+				// Add finalizer on first reconcile
+				if i == 0 {
+					result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result.RequeueAfter).To(BeZero())
+				}
+
+				result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+
+				// Verify exponential increase (allowing for jitter)
+				if i > 0 {
+					Expect(result.RequeueAfter).To(BeNumerically(">=", previousDelay/2))
+				}
+				previousDelay = result.RequeueAfter
+
+				// Verify retry count increases
+				var updatedResource sourcev1alpha1.ExternalSource
+				Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedResource)).To(Succeed())
+				Expect(reconciler.getRetryCount(&updatedResource)).To(Equal(i + 1))
+			}
+
+			By("verifying eventual stalling after max retries")
+			// Continue until max retries
+			for i := 5; i < maxRetryAttempts; i++ {
+				result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			}
+
+			// One more reconcile should result in stalling
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(5 * time.Minute)) // Regular interval
+
+			var finalResource sourcev1alpha1.ExternalSource
+			Expect(k8sClient.Get(ctx, typeNamespacedName, &finalResource)).To(Succeed())
+
+			stalledCondition := findCondition(finalResource.Status.Conditions, StalledCondition)
+			Expect(stalledCondition).NotTo(BeNil())
+			Expect(stalledCondition.Status).To(Equal(metav1.ConditionTrue))
+
+			By("cleaning up the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+
+		It("should handle configuration errors without retry", func() {
+			resourceName := "test-config-error"
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			By("setting up factory to return configuration error")
+			mockFactory.CreateGeneratorFunc = func(generatorType string) (generator.SourceGenerator, error) {
+				return nil, fmt.Errorf("unsupported generator type: invalid")
+			}
+
+			By("creating an ExternalSource resource")
+			resource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("performing reconciliation")
+			// First reconcile adds finalizer
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second reconcile should fail with configuration error and not retry
+			result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeZero()) // No retry for config errors
+
+			By("verifying configuration error condition")
+			var updatedResource sourcev1alpha1.ExternalSource
+			Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedResource)).To(Succeed())
+
+			readyCondition := findCondition(updatedResource.Status.Conditions, ReadyCondition)
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(readyCondition.Reason).To(Equal("ConfigurationError"))
+			Expect(readyCondition.Message).To(ContainSubstring("will not retry until spec changes"))
+
+			// Verify no retry count is set
+			Expect(reconciler.getRetryCount(&updatedResource)).To(Equal(0))
+
+			By("cleaning up the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+
+		It("should handle permanent errors without retry", func() {
+			resourceName := "test-permanent-error"
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			By("setting up generator to return permanent error")
+			Expect(mockFactory.RegisterGenerator("http", func() generator.SourceGenerator {
+				return &MockSourceGenerator{
+					GenerateFunc: func(ctx context.Context, config generator.GeneratorConfig) (*generator.SourceData, error) {
+						return nil, fmt.Errorf("404 not found")
+					},
+				}
+			})).To(Succeed())
+
+			By("creating an ExternalSource resource")
+			resource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("performing reconciliation")
+			// First reconcile adds finalizer
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second reconcile should fail with permanent error
+			result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(5 * time.Minute)) // Regular interval, no retry
+
+			By("verifying permanent error condition")
+			var updatedResource sourcev1alpha1.ExternalSource
+			Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedResource)).To(Succeed())
+
+			readyCondition := findCondition(updatedResource.Status.Conditions, ReadyCondition)
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(readyCondition.Reason).To(Equal("PermanentError"))
+			Expect(readyCondition.Message).To(ContainSubstring("will not retry"))
+
+			By("cleaning up the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+
+		It("should recover from failures when generator starts working", func() {
+			resourceName := "test-recovery-success"
+			typeNamespacedName := types.NamespacedName{
+				Name:      resourceName,
+				Namespace: "default",
+			}
+
+			failureCount := 0
+			By("setting up generator to fail initially then succeed")
+			Expect(mockFactory.RegisterGenerator("http", func() generator.SourceGenerator {
+				return &MockSourceGenerator{
+					GenerateFunc: func(ctx context.Context, config generator.GeneratorConfig) (*generator.SourceData, error) {
+						failureCount++
+						if failureCount <= 3 {
+							return nil, fmt.Errorf("temporary network error")
+						}
+						return &generator.SourceData{
+							Data:         []byte(`{"recovered": true}`),
+							LastModified: "recovery-etag",
+							Metadata:     map[string]string{"status": "recovered"},
+						}, nil
+					},
+				}
+			})).To(Succeed())
+
+			By("creating an ExternalSource resource")
+			resource := &sourcev1alpha1.ExternalSource{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: sourcev1alpha1.ExternalSourceSpec{
+					Interval: "5m",
+					Generator: sourcev1alpha1.GeneratorSpec{
+						Type: "http",
+						HTTP: &sourcev1alpha1.HTTPGeneratorSpec{
+							URL: "https://api.example.com/config",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("performing reconciliations through failures")
+			// First reconcile adds finalizer
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Fail a few times
+			for i := 0; i < 3; i++ {
+				result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			}
+
+			By("succeeding on recovery")
+			result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(5 * time.Minute))
+
+			By("verifying successful recovery")
+			var updatedResource sourcev1alpha1.ExternalSource
+			Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedResource)).To(Succeed())
+
+			readyCondition := findCondition(updatedResource.Status.Conditions, ReadyCondition)
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(readyCondition.Reason).To(Equal(SucceededReason))
+
+			// Verify retry count is cleared
+			Expect(reconciler.getRetryCount(&updatedResource)).To(Equal(0))
+
+			// Verify artifact was created
+			Expect(updatedResource.Status.Artifact).NotTo(BeNil())
+			Expect(updatedResource.Status.LastHandledETag).To(Equal("recovery-etag"))
+
+			By("cleaning up the resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+		})
+	})
+})
