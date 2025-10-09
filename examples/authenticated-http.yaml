@@ -1,0 +1,74 @@
+# Authenticated HTTP Source Example
+#
+# This example demonstrates how to fetch data from an API that requires
+# authentication using HTTP headers stored in a Kubernetes secret.
+#
+# Expected behavior:
+# - Uses Bearer token authentication from a secret
+# - Fetches data every 5 minutes
+# - Handles authentication errors gracefully
+#
+# Setup:
+#   1. Create the secret with your API token
+#   2. Apply this ExternalSource configuration
+#
+# Usage:
+#   kubectl create secret generic api-credentials \
+#     --from-literal=Authorization="Bearer your-api-token-here"
+#   kubectl apply -f authenticated-http.yaml
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-credentials
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded "Bearer your-api-token-here"
+  # Replace with your actual token: echo -n "Bearer your-token" | base64
+  Authorization: QmVhcmVyIHlvdXItYXBpLXRva2VuLWhlcmU=
+
+---
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: secure-api-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: authenticated-http
+spec:
+  # Check for updates every 5 minutes
+  interval: 5m
+  
+  # Place the fetched data at this path within the artifact
+  destinationPath: secure-config.json
+  
+  # HTTP generator with authentication
+  generator:
+    type: http
+    http:
+      # Replace with your authenticated API endpoint
+      url: https://api.example.com/v1/config
+      method: GET
+      
+      # Reference to secret containing authentication headers
+      headersSecretRef:
+        name: api-credentials
+
+---
+# Troubleshooting authentication issues:
+#
+# 1. Check if the secret exists and has the correct data:
+#    kubectl get secret api-credentials -o yaml
+#
+# 2. Verify the ExternalSource status for authentication errors:
+#    kubectl describe externalsource secure-api-config
+#
+# 3. Check controller logs for detailed error messages:
+#    kubectl logs -n fx-system deployment/fx-controller-manager
+#
+# Common authentication headers:
+# - Authorization: "Bearer token" or "Basic base64(user:pass)"
+# - X-API-Key: "your-api-key"
+# - X-Auth-Token: "your-auth-token"

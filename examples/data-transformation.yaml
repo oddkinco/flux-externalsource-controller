@@ -1,0 +1,195 @@
+# Data Transformation Example
+#
+# This example demonstrates how to use CEL (Common Expression Language)
+# to transform API responses before packaging them as artifacts.
+#
+# Expected behavior:
+# - Fetches raw data from an API
+# - Applies CEL transformation to restructure the data
+# - Packages the transformed data as a Kubernetes ConfigMap
+#
+# Usage:
+#   kubectl apply -f data-transformation.yaml
+#   kubectl get externalsource transformed-config -w
+
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: transformed-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: data-transformation
+spec:
+  # Check for updates every 10 minutes
+  interval: 10m
+  
+  # Place the transformed data at this path within the artifact
+  destinationPath: configmap.yaml
+  
+  # HTTP generator configuration
+  generator:
+    type: http
+    http:
+      # API that returns raw configuration data
+      url: https://api.example.com/app/settings
+      method: GET
+  
+  # CEL transformation to convert API response to ConfigMap
+  transform:
+    type: cel
+    expression: |
+      {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+          "name": "app-settings",
+          "namespace": "default"
+        },
+        "data": {
+          "database_url": data.database.url,
+          "redis_url": data.cache.redis_url,
+          "log_level": data.logging.level,
+          "feature_flags": string(data.features)
+        }
+      }
+
+---
+# Example 2: Extract specific fields from a complex API response
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: filtered-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: field-extraction
+spec:
+  interval: 15m
+  destinationPath: app-config.json
+  
+  generator:
+    type: http
+    http:
+      url: https://api.example.com/complex-config
+  
+  # Extract only the fields we need from a complex response
+  transform:
+    type: cel
+    expression: |
+      {
+        "environment": data.env.name,
+        "version": data.app.version,
+        "endpoints": {
+          "api": data.services.api.endpoint,
+          "database": data.services.database.connection_string
+        },
+        "limits": {
+          "max_connections": data.limits.connections,
+          "timeout": data.limits.request_timeout
+        }
+      }
+
+---
+# Example 3: Conditional transformation based on data content
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: conditional-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: conditional-transformation
+spec:
+  interval: 20m
+  destinationPath: environment-config.yaml
+  
+  generator:
+    type: http
+    http:
+      url: https://config-api.example.com/environment/production
+  
+  # Apply different transformations based on environment
+  transform:
+    type: cel
+    expression: |
+      data.environment == "production" ? 
+      {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": "prod-config"},
+        "type": "Opaque",
+        "data": {
+          "database_url": base64.encode(data.database_url),
+          "api_key": base64.encode(data.api_key)
+        }
+      } : 
+      {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": "dev-config"},
+        "data": {
+          "database_url": data.database_url,
+          "debug": "true"
+        }
+      }
+
+---
+# Example 4: Array processing and filtering
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: service-discovery
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: array-processing
+spec:
+  interval: 5m
+  destinationPath: services.yaml
+  
+  generator:
+    type: http
+    http:
+      url: https://service-registry.example.com/services
+  
+  # Filter and transform an array of services
+  transform:
+    type: cel
+    expression: |
+      {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": "service-endpoints"},
+        "data": {
+          "services.json": string({
+            "services": data.services.filter(s, s.status == "healthy").map(s, {
+              "name": s.name,
+              "endpoint": s.endpoint,
+              "port": s.port,
+              "version": s.version
+            })
+          })
+        }
+      }
+
+---
+# CEL Transformation Reference:
+#
+# Available variables:
+# - data: The parsed JSON response from the HTTP source
+#
+# Common CEL functions:
+# - has(data.field): Check if field exists
+# - string(value): Convert to string
+# - base64.encode(string): Base64 encode a string
+# - size(array): Get array length
+# - array.filter(item, condition): Filter array elements
+# - array.map(item, expression): Transform array elements
+#
+# Troubleshooting transformations:
+# 1. Check the raw API response format
+# 2. Test CEL expressions incrementally
+# 3. Use simple expressions first, then add complexity
+# 4. Check ExternalSource status for transformation errors
+# 5. Review controller logs for detailed error messages

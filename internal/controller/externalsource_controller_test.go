@@ -25,10 +25,12 @@ package controller
 import (
 	"context"
 	"fmt"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -2011,3 +2013,434 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		})
 	})
 })
+
+// Standard Go tests for utility functions
+
+func TestMapsEqual(t *testing.T) {
+	tests := []struct {
+		name     string
+		mapA     map[string]string
+		mapB     map[string]string
+		expected bool
+	}{
+		{
+			name:     "both maps nil",
+			mapA:     nil,
+			mapB:     nil,
+			expected: true,
+		},
+		{
+			name:     "both maps empty",
+			mapA:     map[string]string{},
+			mapB:     map[string]string{},
+			expected: true,
+		},
+		{
+			name:     "identical maps",
+			mapA:     map[string]string{"key1": "value1", "key2": "value2"},
+			mapB:     map[string]string{"key1": "value1", "key2": "value2"},
+			expected: true,
+		},
+		{
+			name:     "identical maps different order",
+			mapA:     map[string]string{"key1": "value1", "key2": "value2"},
+			mapB:     map[string]string{"key2": "value2", "key1": "value1"},
+			expected: true,
+		},
+		{
+			name:     "different lengths",
+			mapA:     map[string]string{"key1": "value1"},
+			mapB:     map[string]string{"key1": "value1", "key2": "value2"},
+			expected: false,
+		},
+		{
+			name:     "different values",
+			mapA:     map[string]string{"key1": "value1"},
+			mapB:     map[string]string{"key1": "value2"},
+			expected: false,
+		},
+		{
+			name:     "different keys",
+			mapA:     map[string]string{"key1": "value1"},
+			mapB:     map[string]string{"key2": "value1"},
+			expected: false,
+		},
+		{
+			name:     "one map nil, other empty",
+			mapA:     nil,
+			mapB:     map[string]string{},
+			expected: true,
+		},
+		{
+			name:     "one map nil, other has values",
+			mapA:     nil,
+			mapB:     map[string]string{"key1": "value1"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mapsEqual(tt.mapA, tt.mapB)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestExternalSourceReconciler_needsRecovery(t *testing.T) {
+	reconciler := &ExternalSourceReconciler{}
+
+	tests := []struct {
+		name           string
+		externalSource *sourcev1alpha1.ExternalSource
+		expected       bool
+	}{
+		{
+			name: "no conditions - no recovery needed",
+			externalSource: &sourcev1alpha1.ExternalSource{
+				Status: sourcev1alpha1.ExternalSourceStatus{},
+			},
+			expected: false,
+		},
+		{
+			name: "ready condition true - no recovery needed",
+			externalSource: &sourcev1alpha1.ExternalSource{
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   ReadyCondition,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "fetching condition true - recovery needed",
+			externalSource: &sourcev1alpha1.ExternalSource{
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   FetchingCondition,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "transforming condition true - recovery needed",
+			externalSource: &sourcev1alpha1.ExternalSource{
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   TransformingCondition,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "storing condition true - recovery needed",
+			externalSource: &sourcev1alpha1.ExternalSource{
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   StoringCondition,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "multiple in-progress conditions - recovery needed",
+			externalSource: &sourcev1alpha1.ExternalSource{
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   FetchingCondition,
+							Status: metav1.ConditionTrue,
+						},
+						{
+							Type:   TransformingCondition,
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "in-progress condition false - no recovery needed",
+			externalSource: &sourcev1alpha1.ExternalSource{
+				Status: sourcev1alpha1.ExternalSourceStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   FetchingCondition,
+							Status: metav1.ConditionFalse,
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := reconciler.needsRecovery(tt.externalSource)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestExternalSourceReconciler_setCondition(t *testing.T) {
+	reconciler := &ExternalSourceReconciler{}
+
+	externalSource := &sourcev1alpha1.ExternalSource{
+		Status: sourcev1alpha1.ExternalSourceStatus{},
+	}
+
+	// Test setting a new condition
+	reconciler.setCondition(externalSource, ReadyCondition, metav1.ConditionTrue, "TestReason", "Test message")
+
+	assert.Len(t, externalSource.Status.Conditions, 1)
+	condition := externalSource.Status.Conditions[0]
+	assert.Equal(t, ReadyCondition, condition.Type)
+	assert.Equal(t, metav1.ConditionTrue, condition.Status)
+	assert.Equal(t, "TestReason", condition.Reason)
+	assert.Equal(t, "Test message", condition.Message)
+	assert.NotEmpty(t, condition.LastTransitionTime)
+
+	// Test updating existing condition with same status
+	originalTime := condition.LastTransitionTime
+	reconciler.setCondition(externalSource, ReadyCondition, metav1.ConditionTrue, "TestReason", "Updated message")
+
+	assert.Len(t, externalSource.Status.Conditions, 1)
+	updatedCondition := externalSource.Status.Conditions[0]
+	assert.Equal(t, "Updated message", updatedCondition.Message)
+	assert.Equal(t, originalTime, updatedCondition.LastTransitionTime) // Should not change
+
+	// Test updating existing condition with different status
+	reconciler.setCondition(externalSource, ReadyCondition, metav1.ConditionFalse, "ErrorReason", "Error message")
+
+	assert.Len(t, externalSource.Status.Conditions, 1)
+	finalCondition := externalSource.Status.Conditions[0]
+	assert.Equal(t, metav1.ConditionFalse, finalCondition.Status)
+	assert.Equal(t, "ErrorReason", finalCondition.Reason)
+	assert.Equal(t, "Error message", finalCondition.Message)
+	assert.NotEqual(t, originalTime, finalCondition.LastTransitionTime) // Should change
+}
+
+func TestExternalSourceReconciler_hasCondition(t *testing.T) {
+	reconciler := &ExternalSourceReconciler{}
+
+	externalSource := &sourcev1alpha1.ExternalSource{
+		Status: sourcev1alpha1.ExternalSourceStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   ReadyCondition,
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Type:   FetchingCondition,
+					Status: metav1.ConditionFalse,
+				},
+			},
+		},
+	}
+
+	// Test existing condition with matching status
+	assert.True(t, reconciler.hasCondition(externalSource, ReadyCondition, metav1.ConditionTrue))
+	assert.True(t, reconciler.hasCondition(externalSource, FetchingCondition, metav1.ConditionFalse))
+
+	// Test existing condition with non-matching status
+	assert.False(t, reconciler.hasCondition(externalSource, ReadyCondition, metav1.ConditionFalse))
+	assert.False(t, reconciler.hasCondition(externalSource, FetchingCondition, metav1.ConditionTrue))
+
+	// Test non-existing condition
+	assert.False(t, reconciler.hasCondition(externalSource, TransformingCondition, metav1.ConditionTrue))
+	assert.False(t, reconciler.hasCondition(externalSource, TransformingCondition, metav1.ConditionFalse))
+}
+
+func TestExternalSourceReconciler_getConditionMessage(t *testing.T) {
+	reconciler := &ExternalSourceReconciler{}
+
+	externalSource := &sourcev1alpha1.ExternalSource{
+		Status: sourcev1alpha1.ExternalSourceStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:    ReadyCondition,
+					Status:  metav1.ConditionTrue,
+					Message: "Ready message",
+				},
+				{
+					Type:    FetchingCondition,
+					Status:  metav1.ConditionFalse,
+					Message: "Fetching message",
+				},
+			},
+		},
+	}
+
+	// Test existing condition
+	assert.Equal(t, "Ready message", reconciler.getConditionMessage(externalSource, ReadyCondition))
+	assert.Equal(t, "Fetching message", reconciler.getConditionMessage(externalSource, FetchingCondition))
+
+	// Test non-existing condition
+	assert.Equal(t, "", reconciler.getConditionMessage(externalSource, TransformingCondition))
+}
+
+func TestExternalSourceReconciler_clearProgressConditions(t *testing.T) {
+	reconciler := &ExternalSourceReconciler{}
+
+	externalSource := &sourcev1alpha1.ExternalSource{
+		Status: sourcev1alpha1.ExternalSourceStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   ReadyCondition,
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Type:   FetchingCondition,
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Type:   TransformingCondition,
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Type:   StoringCondition,
+					Status: metav1.ConditionTrue,
+				},
+			},
+		},
+	}
+
+	reconciler.clearProgressConditions(externalSource)
+
+	// Should have only the Ready condition remaining (progress conditions removed)
+	assert.Len(t, externalSource.Status.Conditions, 1)
+
+	// Only Ready condition should remain
+	assert.Equal(t, ReadyCondition, externalSource.Status.Conditions[0].Type)
+	assert.Equal(t, metav1.ConditionTrue, externalSource.Status.Conditions[0].Status)
+}
+
+func TestContains(t *testing.T) {
+	tests := []struct {
+		name     string
+		str      string
+		substr   string
+		expected bool
+	}{
+		{
+			name:     "substring exists",
+			str:      "hello world",
+			substr:   "world",
+			expected: true,
+		},
+		{
+			name:     "substring does not exist",
+			str:      "hello world",
+			substr:   "foo",
+			expected: false,
+		},
+		{
+			name:     "empty substring",
+			str:      "hello",
+			substr:   "",
+			expected: true,
+		},
+		{
+			name:     "empty string",
+			str:      "",
+			substr:   "hello",
+			expected: false,
+		},
+		{
+			name:     "case sensitive match",
+			str:      "Hello World",
+			substr:   "World",
+			expected: true,
+		},
+		{
+			name:     "exact match",
+			str:      "hello",
+			substr:   "hello",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := contains(tt.str, tt.substr)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFindSubstring(t *testing.T) {
+	tests := []struct {
+		name     string
+		str      string
+		substr   string
+		expected bool
+	}{
+		{
+			name:     "substring found",
+			str:      "hello world",
+			substr:   "world",
+			expected: true,
+		},
+		{
+			name:     "substring not found",
+			str:      "hello",
+			substr:   "world",
+			expected: false,
+		},
+		{
+			name:     "empty string",
+			str:      "",
+			substr:   "world",
+			expected: false,
+		},
+		{
+			name:     "empty substring",
+			str:      "hello",
+			substr:   "",
+			expected: true,
+		},
+		{
+			name:     "exact match",
+			str:      "world",
+			substr:   "world",
+			expected: true,
+		},
+		{
+			name:     "substring at beginning",
+			str:      "hello world",
+			substr:   "hello",
+			expected: true,
+		},
+		{
+			name:     "substring at end",
+			str:      "hello world",
+			substr:   "world",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := findSubstring(tt.str, tt.substr)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

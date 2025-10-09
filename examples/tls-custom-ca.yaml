@@ -1,0 +1,99 @@
+# Custom TLS CA Bundle Example
+#
+# This example demonstrates how to configure ExternalSource to work with
+# internal APIs that use custom Certificate Authorities (CA).
+#
+# Expected behavior:
+# - Uses custom CA bundle for TLS verification
+# - Connects to internal/private APIs securely
+# - Validates certificates against the custom CA
+#
+# Setup:
+#   1. Create a secret with your custom CA certificate
+#   2. Apply this ExternalSource configuration
+#
+# Usage:
+#   kubectl create secret generic custom-ca-bundle \
+#     --from-file=ca.crt=/path/to/your/ca-certificate.pem
+#   kubectl apply -f tls-custom-ca.yaml
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: custom-ca-bundle
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded CA certificate
+  # Create with: kubectl create secret generic custom-ca-bundle --from-file=ca.crt=ca.pem
+  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCi4uLiAoWW91ciBDQSBjZXJ0aWZpY2F0ZSBjb250ZW50IGhlcmUpIC4uLgotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0t
+
+---
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: internal-api-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: tls-custom-ca
+spec:
+  # Check for updates every 15 minutes
+  interval: 15m
+  
+  # Place the fetched data at this path within the artifact
+  destinationPath: internal-config.json
+  
+  # HTTP generator with custom TLS configuration
+  generator:
+    type: http
+    http:
+      # Internal API endpoint using custom CA
+      url: https://internal-api.company.local/config
+      method: GET
+      
+      # Reference to secret containing custom CA bundle
+      caBundleSecretRef:
+        name: custom-ca-bundle
+        key: ca.crt
+      
+      # Set to true only for development/testing (not recommended for production)
+      insecureSkipVerify: false
+
+---
+# Alternative: Skip TLS verification (NOT RECOMMENDED for production)
+# Only use this for development or when you cannot obtain the proper CA certificate
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: insecure-api-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: insecure-tls
+spec:
+  interval: 30m
+  destinationPath: config.json
+  generator:
+    type: http
+    http:
+      url: https://self-signed-api.example.com/config
+      # WARNING: This skips all TLS certificate verification
+      insecureSkipVerify: true
+
+---
+# Troubleshooting TLS issues:
+#
+# 1. Verify the CA certificate is correct:
+#    kubectl get secret custom-ca-bundle -o jsonpath='{.data.ca\.crt}' | base64 -d
+#
+# 2. Test TLS connection manually:
+#    openssl s_client -connect internal-api.company.local:443 -CAfile ca.crt
+#
+# 3. Check ExternalSource status for TLS errors:
+#    kubectl describe externalsource internal-api-config
+#
+# 4. Common TLS error messages:
+#    - "certificate signed by unknown authority" → Need custom CA
+#    - "certificate is valid for X, not Y" → Hostname mismatch
+#    - "certificate has expired" → Certificate needs renewal

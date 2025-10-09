@@ -1,0 +1,50 @@
+# Simple HTTP Source Example
+#
+# This example demonstrates the most basic ExternalSource configuration
+# that fetches JSON data from a public API endpoint.
+#
+# Expected behavior:
+# - Fetches data from the specified URL every 10 minutes
+# - Packages the response as config.json in a .tar.gz archive
+# - Creates an ExternalArtifact resource with the artifact URL and revision
+#
+# Usage:
+#   kubectl apply -f simple-http.yaml
+#   kubectl get externalsource simple-config -w
+
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: simple-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: simple-http
+spec:
+  # Check for updates every 10 minutes
+  interval: 10m
+  
+  # Place the fetched data at this path within the artifact
+  destinationPath: config.json
+  
+  # HTTP generator configuration
+  generator:
+    type: http
+    http:
+      # Public API endpoint (replace with your actual endpoint)
+      url: https://jsonplaceholder.typicode.com/posts/1
+      method: GET
+
+---
+# Example of how to check the status
+# kubectl get externalsource simple-config -o yaml
+#
+# Expected status fields:
+# status:
+#   conditions:
+#   - type: Ready
+#     status: "True"
+#   artifact:
+#     url: "s3://bucket/artifacts/simple-config-abc123.tar.gz"
+#     revision: "abc123def456"
+#     lastUpdateTime: "2025-01-01T12:00:00Z"

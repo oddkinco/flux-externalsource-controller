@@ -1,0 +1,20 @@
+apiVersion: v2
+name: fx-controller
+description: A Helm chart for ExternalSource Controller - integrates external data sources into GitOps workflows
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/example/fx-controller
+sources:
+  - https://github.com/example/fx-controller
+maintainers:
+  - name: fx-controller-maintainers
+    email: maintainers@example.com
+keywords:
+  - kubernetes
+  - gitops
+  - flux
+  - external-sources
+  - controller
+annotations:
+  category: Infrastructure

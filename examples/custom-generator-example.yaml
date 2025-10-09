@@ -1,0 +1,364 @@
+# Custom Generator Implementation Example
+#
+# This example demonstrates how to implement and use a custom source generator.
+# In this case, we'll show a hypothetical "vault" generator that fetches
+# secrets from HashiCorp Vault.
+
+# First, let's see how the custom generator would be used:
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vault-auth
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded Vault token
+  token: aHZzLjEyMzQ1Njc4OTA=
+
+---
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: vault-secrets
+  namespace: default
+  labels:
+    app.kubernetes.io/name: fx-controller
+    example: custom-generator
+spec:
+  interval: 30m  # Check for secret updates every 30 minutes
+  destinationPath: secrets.yaml
+  
+  generator:
+    type: vault  # Our custom generator type
+    vault:
+      # Vault server configuration
+      address: https://vault.company.com:8200
+      
+      # Authentication token from secret
+      tokenSecretRef:
+        name: vault-auth
+        key: token
+      
+      # Path to the secret in Vault
+      path: secret/data/myapp/production
+      
+      # Optional: Vault namespace (for Vault Enterprise)
+      namespace: myapp
+      
+      # Optional: Custom CA bundle for TLS
+      caBundleSecretRef:
+        name: vault-ca
+        key: ca.crt
+  
+  # Transform Vault response to Kubernetes Secret format
+  transform:
+    type: cel
+    expression: |
+      {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {
+          "name": "myapp-secrets",
+          "namespace": "default"
+        },
+        "type": "Opaque",
+        "data": {
+          "database-url": base64.encode(data.data.database_url),
+          "api-key": base64.encode(data.data.api_key),
+          "jwt-secret": base64.encode(data.data.jwt_secret)
+        }
+      }
+
+---
+# Here's how the custom Vault generator would be implemented:
+# 
+# File: internal/generator/vault.go
+#
+# package generator
+# 
+# import (
+#     "context"
+#     "encoding/json"
+#     "fmt"
+#     "net/http"
+#     "time"
+# 
+#     "github.com/hashicorp/vault/api"
+# )
+# 
+# type VaultGenerator struct {
+#     client       *api.Client
+#     secretClient SecretClient
+#     logger       logr.Logger
+# }
+# 
+# type VaultConfig struct {
+#     Address          string `json:"address"`
+#     TokenSecretRef   string `json:"tokenSecretRef"`
+#     Path             string `json:"path"`
+#     Namespace        string `json:"namespace,omitempty"`
+#     CaBundleSecretRef string `json:"caBundleSecretRef,omitempty"`
+# }
+# 
+# func NewVaultGenerator(secretClient SecretClient, logger logr.Logger) *VaultGenerator {
+#     return &VaultGenerator{
+#         secretClient: secretClient,
+#         logger:       logger,
+#     }
+# }
+# 
+# func (g *VaultGenerator) Generate(ctx context.Context, config GeneratorConfig) (*SourceData, error) {
+#     vaultConfig, err := g.parseConfig(config)
+#     if err != nil {
+#         return nil, fmt.Errorf("failed to parse vault config: %w", err)
+#     }
+# 
+#     // Initialize Vault client
+#     client, err := g.initVaultClient(ctx, vaultConfig)
+#     if err != nil {
+#         return nil, fmt.Errorf("failed to initialize vault client: %w", err)
+#     }
+# 
+#     // Read secret from Vault
+#     secret, err := client.Logical().Read(vaultConfig.Path)
+#     if err != nil {
+#         return nil, fmt.Errorf("failed to read vault secret: %w", err)
+#     }
+# 
+#     if secret == nil {
+#         return nil, fmt.Errorf("secret not found at path: %s", vaultConfig.Path)
+#     }
+# 
+#     // Marshal secret data to JSON
+#     data, err := json.Marshal(secret.Data)
+#     if err != nil {
+#         return nil, fmt.Errorf("failed to marshal secret data: %w", err)
+#     }
+# 
+#     return &SourceData{
+#         Data:         data,
+#         LastModified: fmt.Sprintf("%d", secret.CreatedTime.Unix()),
+#         Metadata: map[string]string{
+#             "vault_path":    vaultConfig.Path,
+#             "vault_version": fmt.Sprintf("%d", secret.VersionMetadata.Version),
+#             "created_time":  secret.CreatedTime.Format(time.RFC3339),
+#         },
+#     }, nil
+# }
+# 
+# func (g *VaultGenerator) SupportsConditionalFetch() bool {
+#     return true // Vault secrets have version metadata
+# }
+# 
+# func (g *VaultGenerator) GetLastModified(ctx context.Context, config GeneratorConfig) (string, error) {
+#     // Implementation to get secret metadata without reading the full secret
+#     // This would use Vault's metadata endpoint
+#     return "", nil
+# }
+
+---
+# Example of registering the custom generator in the controller:
+#
+# File: internal/controller/externalsource_controller.go
+#
+# func (r *ExternalSourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+#     r.factory = generator.NewFactory()
+#     
+#     // Register built-in generators
+#     r.factory.RegisterGenerator("http", func() generator.SourceGenerator {
+#         return generator.NewHTTPGenerator(r.httpClient)
+#     })
+#     
+#     // Register custom Vault generator
+#     r.factory.RegisterGenerator("vault", func() generator.SourceGenerator {
+#         return generator.NewVaultGenerator(r.secretClient, r.Log)
+#     })
+#     
+#     return ctrl.NewControllerManagedBy(mgr).
+#         For(&sourcev1alpha1.ExternalSource{}).
+#         Complete(r)
+# }
+
+---
+# CRD schema update to support the new generator:
+#
+# File: api/v1alpha1/externalsource_types.go
+#
+# type Generator struct {
+#     // +kubebuilder:validation:Required
+#     // +kubebuilder:validation:Enum=http;vault
+#     Type string `json:"type"`
+#     
+#     // +optional
+#     HTTP *HTTPGenerator `json:"http,omitempty"`
+#     
+#     // +optional
+#     Vault *VaultGenerator `json:"vault,omitempty"`
+# }
+# 
+# type VaultGenerator struct {
+#     // +kubebuilder:validation:Required
+#     Address string `json:"address"`
+#     
+#     // +kubebuilder:validation:Required
+#     TokenSecretRef LocalObjectReference `json:"tokenSecretRef"`
+#     
+#     // +kubebuilder:validation:Required
+#     Path string `json:"path"`
+#     
+#     // +optional
+#     Namespace string `json:"namespace,omitempty"`
+#     
+#     // +optional
+#     CaBundleSecretRef *LocalObjectReference `json:"caBundleSecretRef,omitempty"`
+# }
+
+---
+# Example test for the custom generator:
+#
+# File: internal/generator/vault_test.go
+#
+# func TestVaultGenerator_Generate(t *testing.T) {
+#     tests := []struct {
+#         name          string
+#         config        GeneratorConfig
+#         vaultResponse *api.Secret
+#         expectedError string
+#     }{
+#         {
+#             name: "successful secret fetch",
+#             config: GeneratorConfig{
+#                 Type: "vault",
+#                 Config: map[string]interface{}{
+#                     "address":        "https://vault.example.com",
+#                     "tokenSecretRef": "vault-token",
+#                     "path":           "secret/data/myapp",
+#                 },
+#             },
+#             vaultResponse: &api.Secret{
+#                 Data: map[string]interface{}{
+#                     "data": map[string]interface{}{
+#                         "username": "admin",
+#                         "password": "secret123",
+#                     },
+#                 },
+#                 CreatedTime: time.Now(),
+#             },
+#         },
+#     }
+#     
+#     for _, tt := range tests {
+#         t.Run(tt.name, func(t *testing.T) {
+#             // Test implementation
+#         })
+#     }
+# }
+
+---
+# Advanced usage with multiple secrets and transformation:
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: vault-multi-secrets
+  namespace: default
+spec:
+  interval: 1h
+  destinationPath: all-secrets.yaml
+  
+  generator:
+    type: vault
+    vault:
+      address: https://vault.company.com:8200
+      tokenSecretRef:
+        name: vault-auth
+        key: token
+      # Use a custom path that returns multiple secrets
+      path: secret/metadata/myapp/
+  
+  # Transform multiple secrets into a single ConfigMap
+  transform:
+    type: cel
+    expression: |
+      {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+          "name": "vault-secrets-index",
+          "namespace": "default"
+        },
+        "data": {
+          "secrets.json": string({
+            "available_secrets": data.keys,
+            "last_updated": string(now),
+            "total_count": size(data.keys)
+          })
+        }
+      }
+
+---
+# Integration with Flux for automatic secret rotation:
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: vault-secrets-deployment
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: ExternalArtifact
+    name: vault-secrets
+    namespace: default
+  path: "./"
+  targetNamespace: myapp
+  
+  # Restart deployments when secrets change
+  postBuild:
+    substitute:
+      SECRET_VERSION: "${VAULT_SECRET_VERSION}"
+    substituteFrom:
+    - kind: Secret
+      name: myapp-secrets
+
+---
+# Monitoring and alerting for Vault integration:
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vault-externalsource-alerts
+  namespace: default
+spec:
+  groups:
+  - name: vault-externalsource
+    rules:
+    - alert: VaultSecretSyncFailure
+      expr: |
+        externalsource_reconcile_total{generator_type="vault",result="error"} > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Vault secret sync failing for {{ $labels.name }}"
+        description: "ExternalSource {{ $labels.name }} using Vault generator has been failing for more than 5 minutes."
+    
+    - alert: VaultSecretStale
+      expr: |
+        time() - externalsource_last_successful_reconcile_timestamp{generator_type="vault"} > 7200
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Vault secrets are stale for {{ $labels.name }}"
+        description: "Vault secrets for {{ $labels.name }} have not been updated for over 2 hours."
+
+---
+# This example demonstrates:
+# 1. How to define a custom generator configuration in the CRD
+# 2. How to implement the SourceGenerator interface
+# 3. How to register the generator with the factory
+# 4. How to write tests for the custom generator
+# 5. How to use the generator in ExternalSource resources
+# 6. How to integrate with Flux for GitOps workflows
+# 7. How to add monitoring and alerting
+#
+# The modular architecture makes it straightforward to add new source types
+# while maintaining consistency with existing generators.

@@ -50,7 +50,6 @@ make deploy IMG=<registry/image:tag>        # Deploy controller to cluster
 ### Testing
 ```bash
 make test-e2e                    # Run e2e tests with Kind
-make test-e2e-comprehensive      # Run comprehensive e2e tests
 ```
 
 ## Code Quality

@@ -186,9 +186,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Setup signal handler context
+	ctx := ctrl.SetupSignalHandler()
+
 	// Load configuration
 	configManager := config.NewManager(mgr.GetClient())
-	controllerConfig, err := configManager.LoadConfig(ctrl.SetupSignalHandler())
+	controllerConfig, err := configManager.LoadConfig(ctx)
 	if err != nil {
 		setupLog.Error(err, "unable to load configuration")
 		os.Exit(1)
@@ -223,7 +226,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}

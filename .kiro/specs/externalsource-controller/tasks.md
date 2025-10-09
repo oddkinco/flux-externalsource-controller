@@ -144,25 +144,25 @@
     - Verify integration with Flux ExternalArtifact consumption
     - _Requirements: 6.4, 10.1_
 
-- [ ] 10. Documentation and examples
-  - [ ] 10.1 Create user documentation and examples
+- [x] 10. Documentation and examples
+  - [x] 10.1 Create user documentation and examples
     - Write comprehensive README with installation and usage instructions
     - Create example ExternalSource manifests for common use cases
     - _Requirements: 1.1, 2.1_
   
-  - [ ] 10.2 Add developer documentation for extensibility
+  - [x] 10.2 Add developer documentation for extensibility
     - Document how to add new source generator types
     - Provide examples of implementing custom generators
     - _Requirements: 2.1, 2.2, 2.5_
   
-  - [ ] 10.3 Add Docker Compose-based integration testing environment
+  - [x] 10.3 Add Docker Compose-based integration testing environment
     - Use docker k0s image to run a minimal kubernetes cluster
-    - Bootstrap Flux on the cluster with "flux install
+    - Bootstrap Flux on the cluster with "flux install"
     - Install a simple webserver on the cluster that can respond to HTTP requests
     - Deploy fx-controller to the cluster in the flux-system namespace
     - Install sample ExternalSource resources
     - Verify that ExternalArtifact resources are created, and can be retrieved
 
-  - [ ] 10.4 Create github workflows for deployment artifacts for tagged releases
+  - [x] 10.4 Create github workflows for deployment artifacts for tagged releases
     - Create a helm chart for deploying fx-controller
     - Add github workflows that build tagged docker and helm releases and push to ghcr.io package repositories

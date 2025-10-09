@@ -1,0 +1,185 @@
+# Default values for fx-controller
+# This is a YAML-formatted file.
+
+# Controller image configuration
+image:
+  repository: ghcr.io/example/fx-controller
+  tag: ""  # Defaults to chart appVersion
+  pullPolicy: IfNotPresent
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+
+# Controller configuration
+controller:
+  # Number of controller replicas
+  replicas: 1
+  
+  # Log level (debug, info, warn, error)
+  logLevel: info
+  
+  # Enable leader election for multiple replicas
+  leaderElection: true
+  
+  # Storage backend configuration
+  storage:
+    # Backend type: memory or s3
+    backend: memory
+    
+    # S3 configuration (when backend is s3)
+    s3:
+      bucket: ""
+      region: ""
+      endpoint: ""
+      # Credentials from secret
+      credentialsSecret:
+        name: ""
+        accessKeyKey: "access-key"
+        secretKeyKey: "secret-key"
+  
+  # HTTP client configuration
+  http:
+    timeout: 30s
+    
+  # Transformation configuration
+  transform:
+    timeout: 10s
+  
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+  
+  # Node selector for pod assignment
+  nodeSelector: {}
+  
+  # Tolerations for pod assignment
+  tolerations: []
+  
+  # Affinity for pod assignment
+  affinity: {}
+  
+  # Security context for the controller pod
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    fsGroup: 65532
+  
+  # Security context for the controller container
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+  
+  # Additional environment variables
+  env: []
+  # - name: CUSTOM_VAR
+  #   value: "custom-value"
+  
+  # Additional volumes
+  volumes: []
+  # - name: custom-volume
+  #   configMap:
+  #     name: custom-config
+  
+  # Additional volume mounts
+  volumeMounts: []
+  # - name: custom-volume
+  #   mountPath: /etc/custom
+  #   readOnly: true
+
+# Service account configuration
+serviceAccount:
+  # Create a service account
+  create: true
+  # Name of the service account (generated if not specified)
+  name: ""
+  # Annotations for the service account
+  annotations: {}
+
+# RBAC configuration
+rbac:
+  # Create RBAC resources
+  create: true
+
+# Metrics service configuration
+metrics:
+  # Enable metrics service
+  enabled: true
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+  
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    labels: {}
+    annotations: {}
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Webhook configuration (if webhooks are implemented)
+webhook:
+  enabled: false
+  port: 9443
+  
+  # Certificate configuration
+  certificate:
+    # Use cert-manager for certificate management
+    certManager: false
+    # Certificate duration
+    duration: 8760h  # 1 year
+    # Certificate renewal before expiry
+    renewBefore: 720h  # 30 days
+
+# Custom Resource Definitions
+crds:
+  # Install CRDs as part of the chart
+  install: true
+  # Keep CRDs on chart uninstall
+  keep: true
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Network policies
+networkPolicy:
+  enabled: false
+  # Ingress rules
+  ingress: []
+  # Egress rules  
+  egress: []
+
+# Priority class for pods
+priorityClassName: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod labels
+podLabels: {}
+
+# Deployment annotations
+deploymentAnnotations: {}
+
+# Common labels applied to all resources
+commonLabels: {}
+
+# Name override for resources
+nameOverride: ""
+
+# Full name override for resources
+fullnameOverride: ""

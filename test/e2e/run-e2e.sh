@@ -9,6 +9,8 @@ set -euo pipefail
 CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-externalsource-controller:e2e}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 NAMESPACE="${NAMESPACE:-fx-controller-system}"
+KIND_CLUSTER="${KIND_CLUSTER:-fx-controller-e2e}"
+KIND_BINARY="${KIND:-kind}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -32,15 +34,25 @@ error() {
 check_prerequisites() {
     log "Checking prerequisites..."
     
-    # Check if kubectl is available
-    if ! command -v kubectl &> /dev/null; then
-        error "kubectl is not installed or not in PATH"
+    # Check if Docker is running
+    if ! docker info &> /dev/null; then
+        error "Docker is not running. Please start Docker Desktop or Docker daemon."
+        error "On macOS: Start Docker Desktop application"
+        error "On Linux: sudo systemctl start docker"
         exit 1
     fi
     
-    # Check if we can connect to Kubernetes cluster
-    if ! kubectl cluster-info &> /dev/null; then
-        error "Cannot connect to Kubernetes cluster. Check your kubeconfig."
+    # Check if kind is available
+    if ! command -v "$KIND_BINARY" &> /dev/null; then
+        error "kind is not installed or not in PATH"
+        error "Install kind: https://kind.sigs.k8s.io/docs/user/quick-start/#installation"
+        exit 1
+    fi
+    
+    # Check if kubectl is available
+    if ! command -v kubectl &> /dev/null; then
+        error "kubectl is not installed or not in PATH"
+        error "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
         exit 1
     fi
     
@@ -53,6 +65,36 @@ check_prerequisites() {
     log "Prerequisites check passed"
 }
 
+# Setup kind cluster
+setup_kind_cluster() {
+    log "Setting up Kind cluster: $KIND_CLUSTER"
+    
+    # Check if cluster already exists
+    if "$KIND_BINARY" get clusters | grep -q "^$KIND_CLUSTER$"; then
+        log "Kind cluster '$KIND_CLUSTER' already exists"
+    else
+        log "Creating Kind cluster '$KIND_CLUSTER'..."
+        "$KIND_BINARY" create cluster --name "$KIND_CLUSTER"
+    fi
+    
+    # Set kubeconfig context
+    kubectl config use-context "kind-$KIND_CLUSTER"
+    
+    log "Kind cluster setup complete"
+}
+
+# Cleanup kind cluster
+cleanup_kind_cluster() {
+    log "Cleaning up Kind cluster: $KIND_CLUSTER"
+    
+    if "$KIND_BINARY" get clusters | grep -q "^$KIND_CLUSTER$"; then
+        "$KIND_BINARY" delete cluster --name "$KIND_CLUSTER"
+        log "Kind cluster deleted"
+    else
+        log "Kind cluster '$KIND_CLUSTER' does not exist"
+    fi
+}
+
 # Build controller image
 build_controller_image() {
     log "Building controller image: $CONTROLLER_IMAGE"
@@ -63,11 +105,9 @@ build_controller_image() {
     # Build Docker image
     docker build -t "$CONTROLLER_IMAGE" .
     
-    # Load image into kind cluster if using kind
-    if kubectl config current-context | grep -q "kind"; then
-        log "Loading image into kind cluster..."
-        kind load docker-image "$CONTROLLER_IMAGE"
-    fi
+    # Load image into kind cluster
+    log "Loading image into kind cluster..."
+    "$KIND_BINARY" load docker-image "$CONTROLLER_IMAGE" --name "$KIND_CLUSTER"
     
     log "Controller image built successfully"
 }
@@ -100,6 +140,7 @@ run_e2e_tests() {
     
     # Set environment variables for tests
     export PROJECT_IMAGE="$CONTROLLER_IMAGE"
+    export KIND_CLUSTER="$KIND_CLUSTER"
     
     # Run tests with ginkgo
     cd test/e2e
@@ -128,12 +169,14 @@ cleanup_test_environment() {
 main() {
     log "Starting ExternalSource Controller E2E Tests"
     log "Controller Image: $CONTROLLER_IMAGE"
+    log "Kind Cluster: $KIND_CLUSTER"
     log "Namespace: $NAMESPACE"
     
     # Trap to ensure cleanup on exit
-    trap cleanup_test_environment EXIT
+    trap 'cleanup_test_environment; cleanup_kind_cluster' EXIT
     
     check_prerequisites
+    setup_kind_cluster
     build_controller_image
     setup_test_environment
     run_e2e_tests
@@ -144,9 +187,13 @@ main() {
 # Handle command line arguments
 case "${1:-}" in
     "build")
+        check_prerequisites
+        setup_kind_cluster
         build_controller_image
         ;;
     "setup")
+        check_prerequisites
+        setup_kind_cluster
         setup_test_environment
         ;;
     "test")
@@ -154,16 +201,17 @@ case "${1:-}" in
         ;;
     "cleanup")
         cleanup_test_environment
+        cleanup_kind_cluster
         ;;
     "")
         main
         ;;
     *)
         echo "Usage: $0 [build|setup|test|cleanup]"
-        echo "  build   - Build controller image only"
-        echo "  setup   - Setup test environment only"
+        echo "  build   - Build controller image and setup kind cluster"
+        echo "  setup   - Setup kind cluster and test environment"
         echo "  test    - Run tests only (assumes environment is ready)"
-        echo "  cleanup - Cleanup test environment only"
+        echo "  cleanup - Cleanup test environment and kind cluster"
         echo "  (no args) - Run full e2e test suite"
         exit 1
         ;;

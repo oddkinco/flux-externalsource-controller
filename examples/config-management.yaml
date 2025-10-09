@@ -1,0 +1,221 @@
+# Application Configuration Management Example
+#
+# This example demonstrates a complete GitOps workflow for managing
+# application configuration using ExternalSource and Flux integration.
+#
+# Workflow:
+# 1. ExternalSource fetches config from external API
+# 2. Controller packages config as versioned artifact
+# 3. Flux Kustomization consumes the ExternalArtifact
+# 4. Application configuration is deployed to cluster
+#
+# Usage:
+#   kubectl apply -f config-management.yaml
+
+# External source that fetches application configuration
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: app-config-source
+  namespace: flux-system
+  labels:
+    app.kubernetes.io/name: fx-controller
+    app: myapp
+    config-type: application
+spec:
+  # Check for configuration updates every 5 minutes
+  interval: 5m
+  
+  # Package config as application.yaml
+  destinationPath: application.yaml
+  
+  generator:
+    type: http
+    http:
+      # Configuration API endpoint
+      url: https://config-api.company.com/applications/myapp/config
+      method: GET
+      headersSecretRef:
+        name: config-api-credentials
+  
+  # Transform API response to Kubernetes ConfigMap
+  transform:
+    type: cel
+    expression: |
+      {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+          "name": "myapp-config",
+          "namespace": "myapp"
+        },
+        "data": {
+          "database.url": data.database.connection_string,
+          "redis.url": data.cache.redis_endpoint,
+          "log.level": data.logging.level,
+          "features.json": string(data.feature_flags),
+          "limits.json": string({
+            "max_connections": data.limits.database_connections,
+            "request_timeout": data.limits.http_timeout,
+            "memory_limit": data.limits.memory_mb + "Mi"
+          })
+        }
+      }
+
+---
+# Secret containing API credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: config-api-credentials
+  namespace: flux-system
+type: Opaque
+data:
+  # Base64 encoded "Bearer your-config-api-token"
+  Authorization: QmVhcmVyIHlvdXItY29uZmlnLWFwaS10b2tlbg==
+
+---
+# Flux Kustomization that consumes the ExternalArtifact
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: myapp-config
+  namespace: flux-system
+spec:
+  # Apply configuration updates every 2 minutes
+  interval: 2m
+  
+  # Reference the ExternalArtifact created by the ExternalSource
+  sourceRef:
+    kind: ExternalArtifact
+    name: app-config-source
+    namespace: flux-system
+  
+  # Path within the artifact (matches destinationPath above)
+  path: "./"
+  
+  # Target namespace for the configuration
+  targetNamespace: myapp
+  
+  # Prune resources that are no longer in the artifact
+  prune: true
+  
+  # Wait for the ConfigMap to be ready before considering sync complete
+  wait: true
+  timeout: 5m
+
+---
+# Example application deployment that uses the managed configuration
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  namespace: myapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: myapp
+        image: myapp:latest
+        env:
+        # Reference the ConfigMap created by ExternalSource
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: myapp-config
+              key: database.url
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: myapp-config
+              key: redis.url
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: myapp-config
+              key: log.level
+        volumeMounts:
+        - name: config
+          mountPath: /etc/myapp
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: myapp-config
+          items:
+          - key: features.json
+            path: features.json
+          - key: limits.json
+            path: limits.json
+
+---
+# Monitoring: ServiceMonitor for Prometheus to scrape ExternalSource metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: fx-controller-metrics
+  namespace: flux-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fx-controller
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+
+---
+# Alerting: PrometheusRule for configuration sync failures
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: fx-controller-alerts
+  namespace: flux-system
+spec:
+  groups:
+  - name: fx-controller
+    rules:
+    - alert: ExternalSourceSyncFailure
+      expr: |
+        externalsource_reconcile_total{result="error"} > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "ExternalSource {{ $labels.name }} sync failing"
+        description: "ExternalSource {{ $labels.name }} in namespace {{ $labels.namespace }} has been failing to sync for more than 5 minutes."
+    
+    - alert: ExternalSourceStale
+      expr: |
+        time() - externalsource_last_successful_reconcile_timestamp > 3600
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "ExternalSource {{ $labels.name }} data is stale"
+        description: "ExternalSource {{ $labels.name }} in namespace {{ $labels.namespace }} has not successfully synced for over 1 hour."
+
+---
+# Workflow Summary:
+#
+# 1. ExternalSource fetches config from https://config-api.company.com/applications/myapp/config
+# 2. CEL transformation converts API response to Kubernetes ConfigMap format
+# 3. Controller packages the ConfigMap as a .tar.gz artifact
+# 4. ExternalArtifact resource is created with artifact URL and revision
+# 5. Flux Kustomization watches the ExternalArtifact and applies changes
+# 6. Application deployment uses the ConfigMap for configuration
+# 7. Prometheus monitors the sync process and alerts on failures
+#
+# Benefits:
+# - Centralized configuration management
+# - Automatic propagation of config changes
+# - Version tracking and rollback capability
+# - GitOps compliance without storing secrets in Git
+# - Monitoring and alerting for configuration drift

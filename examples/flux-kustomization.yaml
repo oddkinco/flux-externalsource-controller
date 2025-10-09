@@ -1,0 +1,346 @@
+# Flux Integration Examples
+#
+# This file demonstrates various ways to consume ExternalArtifact resources
+# in Flux Kustomizations for different GitOps scenarios.
+
+# Basic Flux Kustomization consuming an ExternalArtifact
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: external-config-basic
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: ExternalArtifact
+    name: app-config-source
+    namespace: default
+  path: "./"
+  prune: true
+  targetNamespace: myapp
+
+---
+# Multi-source Kustomization combining Git and ExternalArtifact
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: app-manifests
+  namespace: flux-system
+spec:
+  interval: 10m
+  url: https://github.com/example/app-manifests
+  ref:
+    branch: main
+
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: app-deployment-with-external-config
+  namespace: flux-system
+spec:
+  interval: 5m
+  
+  # Primary source: Git repository with application manifests
+  sourceRef:
+    kind: GitRepository
+    name: app-manifests
+  path: "./apps/myapp"
+  
+  # Additional sources: External configuration
+  dependsOn:
+  - name: external-config-basic
+  
+  # Post-build substitutions using external config
+  postBuild:
+    substitute:
+      CONFIG_VERSION: "${EXTERNAL_CONFIG_REVISION}"
+    substituteFrom:
+    - kind: ConfigMap
+      name: myapp-config
+      optional: false
+
+---
+# Environment-specific configuration with ExternalArtifact
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: staging-config
+  namespace: flux-system
+  labels:
+    environment: staging
+spec:
+  interval: 10m
+  destinationPath: staging-config.yaml
+  generator:
+    type: http
+    http:
+      url: https://config-api.company.com/environments/staging/config
+
+---
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: production-config
+  namespace: flux-system
+  labels:
+    environment: production
+spec:
+  interval: 30m  # Less frequent updates for production
+  destinationPath: production-config.yaml
+  generator:
+    type: http
+    http:
+      url: https://config-api.company.com/environments/production/config
+      headersSecretRef:
+        name: prod-api-credentials
+
+---
+# Staging environment Kustomization
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: myapp-staging
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: ExternalArtifact
+    name: staging-config
+    namespace: flux-system
+  path: "./"
+  targetNamespace: myapp-staging
+  
+  # Health checks for staging
+  healthChecks:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: myapp
+    namespace: myapp-staging
+
+---
+# Production environment Kustomization with additional safety measures
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: myapp-production
+  namespace: flux-system
+spec:
+  interval: 10m  # Slower rollout for production
+  sourceRef:
+    kind: ExternalArtifact
+    name: production-config
+    namespace: flux-system
+  path: "./"
+  targetNamespace: myapp-production
+  
+  # Wait for staging to be healthy before updating production
+  dependsOn:
+  - name: myapp-staging
+  
+  # Comprehensive health checks for production
+  healthChecks:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: myapp
+    namespace: myapp-production
+  - apiVersion: v1
+    kind: Service
+    name: myapp
+    namespace: myapp-production
+  
+  # Timeout for production deployments
+  timeout: 10m
+  
+  # Retry failed deployments
+  retryInterval: 2m
+
+---
+# Secret management with ExternalArtifact
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: app-secrets
+  namespace: flux-system
+spec:
+  interval: 15m
+  destinationPath: secrets.yaml
+  generator:
+    type: http
+    http:
+      url: https://vault.company.com/v1/secret/data/myapp
+      headersSecretRef:
+        name: vault-token
+  transform:
+    type: cel
+    expression: |
+      {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {
+          "name": "myapp-secrets",
+          "namespace": "myapp"
+        },
+        "type": "Opaque",
+        "data": {
+          "database-password": base64.encode(data.data.database_password),
+          "api-key": base64.encode(data.data.api_key),
+          "jwt-secret": base64.encode(data.data.jwt_secret)
+        }
+      }
+
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: myapp-secrets
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: ExternalArtifact
+    name: app-secrets
+    namespace: flux-system
+  path: "./"
+  targetNamespace: myapp
+  
+  # Decrypt secrets if using SOPS/age
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+
+---
+# Canary deployment with external configuration
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: myapp-canary
+  namespace: myapp
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myapp
+  
+  # Use external configuration for canary analysis
+  analysis:
+    interval: 1m
+    threshold: 5
+    maxWeight: 50
+    stepWeight: 10
+    
+    # Metrics from external monitoring system
+    webhooks:
+    - name: external-metrics
+      url: http://monitoring-api.company.com/canary-metrics
+      timeout: 30s
+      metadata:
+        app: myapp
+        config_version: "{{ .ExternalConfigRevision }}"
+
+---
+# GitOps workflow with external dependencies
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: complete-app-stack
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: app-manifests
+  path: "./complete-stack"
+  
+  # Ensure external configuration is applied first
+  dependsOn:
+  - name: external-config-basic
+  - name: myapp-secrets
+  
+  # Validate the complete stack
+  healthChecks:
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: myapp
+  - apiVersion: apps/v1
+    kind: Deployment
+    name: myapp-worker
+  - apiVersion: v1
+    kind: Service
+    name: myapp-api
+  
+  # Custom validation webhook
+  postBuild:
+    substitute:
+      EXTERNAL_CONFIG_REVISION: "${EXTERNAL_CONFIG_REVISION}"
+    substituteFrom:
+    - kind: ConfigMap
+      name: myapp-config
+
+---
+# Monitoring the GitOps workflow
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flux-dashboard-config
+  namespace: flux-system
+data:
+  dashboard.json: |
+    {
+      "dashboard": {
+        "title": "GitOps with ExternalSource",
+        "panels": [
+          {
+            "title": "ExternalSource Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "externalsource_reconcile_total",
+                "legendFormat": "{{ name }}"
+              }
+            ]
+          },
+          {
+            "title": "Kustomization Status",
+            "type": "stat", 
+            "targets": [
+              {
+                "expr": "gotk_reconcile_condition{type=\"Ready\"}",
+                "legendFormat": "{{ name }}"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+---
+# Best Practices Summary:
+#
+# 1. Use appropriate intervals:
+#    - External config: 5-15m (based on change frequency)
+#    - Kustomizations: 2-5m (faster feedback)
+#    - Production: Longer intervals for stability
+#
+# 2. Implement proper dependencies:
+#    - Config before applications
+#    - Secrets before applications
+#    - Staging before production
+#
+# 3. Add comprehensive health checks:
+#    - Deployments, Services, Ingresses
+#    - Custom application health endpoints
+#    - External dependency checks
+#
+# 4. Monitor the entire pipeline:
+#    - ExternalSource sync status
+#    - Kustomization apply status
+#    - Application health metrics
+#    - End-to-end workflow timing
+#
+# 5. Handle failures gracefully:
+#    - Set appropriate timeouts
+#    - Configure retry intervals
+#    - Implement rollback strategies
+#    - Alert on persistent failures

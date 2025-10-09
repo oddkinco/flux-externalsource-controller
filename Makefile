@@ -58,58 +58,64 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate fmt vet setup-envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+test: manifests generate fmt vet setup-envtest ## Run tests and generate HTML coverage report.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out -covermode=atomic
+	go tool cover -html=cover.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+.PHONY: test-ci
+test-ci: manifests generate fmt vet setup-envtest ## Run tests for CI (no HTML report).
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out -covermode=atomic
+
+.PHONY: coverage
+coverage: ## Generate and view HTML coverage report (requires existing cover.out).
+	go tool cover -html=cover.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+.PHONY: coverage-view
+coverage-view: coverage ## Generate and open HTML coverage report in browser.
+	@if command -v open >/dev/null 2>&1; then \
+		open coverage.html; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open coverage.html; \
+	else \
+		echo "Please open coverage.html in your browser"; \
+	fi
+
+.PHONY: coverage-summary
+coverage-summary: ## Show coverage summary from existing cover.out.
+	@if [ -f cover.out ]; then \
+		go tool cover -func=cover.out | tail -1; \
+	else \
+		echo "No coverage data found. Run 'make test' first."; \
+	fi
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
-KIND_CLUSTER ?= fx-controller-test-e2e
-
-.PHONY: setup-test-e2e
-setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
-	@command -v $(KIND) >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
-		exit 1; \
-	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
-	esac
+KIND_CLUSTER ?= fx-controller-e2e
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
-
-.PHONY: cleanup-test-e2e
-cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
-	@$(KIND) delete cluster --name $(KIND_CLUSTER)
-
-.PHONY: test-e2e-comprehensive
-test-e2e-comprehensive: ## Run comprehensive e2e tests with custom script
-	@echo "Running comprehensive E2E tests..."
-	./test/e2e/run-e2e.sh
+test-e2e: ## Run end-to-end tests with Kind cluster
+	@echo "Running E2E tests with Kind cluster: $(KIND_CLUSTER)"
+	KIND_CLUSTER=$(KIND_CLUSTER) ./test/e2e/run-e2e.sh
 
 .PHONY: test-e2e-build
 test-e2e-build: ## Build controller image for e2e tests
-	./test/e2e/run-e2e.sh build
+	KIND_CLUSTER=$(KIND_CLUSTER) ./test/e2e/run-e2e.sh build
 
 .PHONY: test-e2e-setup
 test-e2e-setup: ## Setup e2e test environment
-	./test/e2e/run-e2e.sh setup
+	KIND_CLUSTER=$(KIND_CLUSTER) ./test/e2e/run-e2e.sh setup
 
 .PHONY: test-e2e-run
 test-e2e-run: ## Run e2e tests only (assumes environment is ready)
-	./test/e2e/run-e2e.sh test
+	KIND_CLUSTER=$(KIND_CLUSTER) ./test/e2e/run-e2e.sh test
 
 .PHONY: test-e2e-cleanup
 test-e2e-cleanup: ## Cleanup e2e test environment
-	./test/e2e/run-e2e.sh cleanup
+	KIND_CLUSTER=$(KIND_CLUSTER) ./test/e2e/run-e2e.sh cleanup
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

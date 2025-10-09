@@ -1,0 +1,114 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "fx-controller.clusterRoleName" . }}
+  labels:
+    {{- include "fx-controller.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.example.com
+  resources:
+  - externalsources
+  - externalartifacts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - source.example.com
+  resources:
+  - externalsources/finalizers
+  - externalartifacts/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - source.example.com
+  resources:
+  - externalsources/status
+  - externalartifacts/status
+  verbs:
+  - get
+  - patch
+  - update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "fx-controller.clusterRoleBindingName" . }}
+  labels:
+    {{- include "fx-controller.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "fx-controller.clusterRoleName" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "fx-controller.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "fx-controller.leaderElectionRoleName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "fx-controller.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "fx-controller.leaderElectionRoleBindingName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "fx-controller.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "fx-controller.leaderElectionRoleName" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "fx-controller.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

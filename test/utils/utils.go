@@ -38,7 +38,7 @@ const (
 	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
 
 	defaultKindBinary  = "kind"
-	defaultKindCluster = "kind"
+	defaultKindCluster = "fx-controller-e2e"
 )
 
 func warnError(err error) {

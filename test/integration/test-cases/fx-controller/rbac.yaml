@@ -1,0 +1,112 @@
+# RBAC configuration for fx-controller
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fx-controller-manager
+  namespace: fx-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fx-controller-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.example.com
+  resources:
+  - externalsources
+  - externalartifacts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - source.example.com
+  resources:
+  - externalsources/finalizers
+  - externalartifacts/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - source.example.com
+  resources:
+  - externalsources/status
+  - externalartifacts/status
+  verbs:
+  - get
+  - patch
+  - update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fx-controller-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fx-controller-manager-role
+subjects:
+- kind: ServiceAccount
+  name: fx-controller-manager
+  namespace: fx-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fx-controller-leader-election-role
+  namespace: fx-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fx-controller-leader-election-rolebinding
+  namespace: fx-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fx-controller-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: fx-controller-manager
+  namespace: fx-system

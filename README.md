@@ -2,129 +2,414 @@
 
 A Kubernetes operator that integrates external, non-Git data sources into GitOps workflows powered by Flux.
 
-## Description
+## Overview
 
 The ExternalSource Controller is a Kubernetes operator built using the Kubebuilder framework that enables integration of external HTTP-based data sources into Flux GitOps workflows. The controller implements an asynchronous reconciliation pattern to fetch, transform, and package external data as versioned artifacts consumable by other Flux controllers.
 
-Key features:
-- **Modular Source Generators**: Pluggable architecture supporting HTTP sources with easy extensibility for future source types
-- **Data Transformation**: Optional CEL-based transformation of fetched data
-- **Artifact Management**: Automatic packaging and versioning of external data as .tar.gz archives
-- **Flux Integration**: Seamless integration with existing Flux controllers through ExternalArtifact resources
-- **Observability**: Comprehensive metrics and status reporting for monitoring and troubleshooting
+### Key Features
 
-## Getting Started
+- **Modular Source Generators**: Pluggable architecture supporting HTTP sources with easy extensibility for future source types
+- **Data Transformation**: Optional CEL-based transformation of fetched data using Common Expression Language
+- **Artifact Management**: Automatic packaging and versioning of external data as .tar.gz archives with SHA256 content hashing
+- **Flux Integration**: Seamless integration with existing Flux controllers through ExternalArtifact resources
+- **Observability**: Comprehensive Prometheus metrics and status reporting for monitoring and troubleshooting
+- **Resilience**: Built-in retry logic with exponential backoff and graceful error handling
+- **Security**: Support for TLS configuration, custom CA bundles, and authentication via Kubernetes secrets
+
+### Use Cases
+
+- **Configuration Management**: Fetch application configuration from external APIs and deploy via GitOps
+- **Secret Rotation**: Automatically retrieve updated secrets from external systems
+- **Dynamic Manifests**: Generate Kubernetes manifests from external data sources
+- **Multi-Environment Config**: Sync environment-specific configuration from centralized APIs
+- **Third-Party Integration**: Integrate with external systems that don't support Git-based workflows
+
+## Quick Start
 
 ### Prerequisites
-- go version v1.24.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+- Kubernetes cluster v1.25+ with admin access
+- kubectl configured to access your cluster
+- Flux v2 installed in your cluster (for consuming ExternalArtifact resources)
 
-```sh
-make docker-build docker-push IMG=<some-registry>/fx-controller:tag
+### Installation
+
+#### Option 1: Using Pre-built Images (Recommended)
+
+1. **Install the CRDs:**
+   ```bash
+   kubectl apply -f https://github.com/example/fx-controller/releases/latest/download/crds.yaml
+   ```
+
+2. **Deploy the controller:**
+   ```bash
+   kubectl apply -f https://github.com/example/fx-controller/releases/latest/download/fx-controller.yaml
+   ```
+
+#### Option 2: Build from Source
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/example/fx-controller.git
+   cd fx-controller
+   ```
+
+2. **Install CRDs:**
+   ```bash
+   make install
+   ```
+
+3. **Build and deploy:**
+   ```bash
+   make docker-build docker-push IMG=<your-registry>/fx-controller:latest
+   make deploy IMG=<your-registry>/fx-controller:latest
+   ```
+
+### Basic Usage
+
+1. **Create an ExternalSource resource:**
+   ```yaml
+   apiVersion: source.example.com/v1alpha1
+   kind: ExternalSource
+   metadata:
+     name: my-config
+     namespace: default
+   spec:
+     interval: 5m
+     generator:
+       type: http
+       http:
+         url: https://api.example.com/config
+   ```
+
+2. **Apply the resource:**
+   ```bash
+   kubectl apply -f externalsource.yaml
+   ```
+
+3. **Check the status:**
+   ```bash
+   kubectl get externalsource my-config -o yaml
+   ```
+
+4. **View the created artifact:**
+   ```bash
+   kubectl get externalartifact
+   ```
+
+## Configuration
+
+### ExternalSource Specification
+
+The ExternalSource custom resource supports the following configuration options:
+
+#### Core Fields
+
+- **interval** (required): How often to check for updates (minimum 1m)
+- **suspend** (optional): Suspend reconciliation when set to true
+- **destinationPath** (optional): Path within the artifact where data should be placed
+
+#### Generator Configuration
+
+Currently supports HTTP generators with the following options:
+
+```yaml
+spec:
+  generator:
+    type: http
+    http:
+      url: "https://api.example.com/data"          # Required: API endpoint
+      method: "GET"                                # Optional: HTTP method (default: GET)
+      headersSecretRef:                           # Optional: Authentication headers
+        name: "api-credentials"
+      caBundleSecretRef:                          # Optional: Custom CA bundle
+        name: "ca-bundle"
+        key: "ca.crt"
+      insecureSkipVerify: false                   # Optional: Skip TLS verification (not recommended)
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+#### Data Transformation
 
-**Install the CRDs into the cluster:**
+Optional CEL-based transformation of fetched data:
 
-```sh
-make install
+```yaml
+spec:
+  transform:
+    type: cel
+    expression: |
+      has(data.config) ? data.config : data
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+### Controller Configuration
 
-```sh
-make deploy IMG=<some-registry>/fx-controller:tag
+The controller supports configuration through environment variables:
+
+- **STORAGE_BACKEND**: `s3` or `memory` (default: memory)
+- **S3_BUCKET**: S3 bucket name for artifact storage
+- **S3_REGION**: S3 region
+- **HTTP_TIMEOUT**: HTTP request timeout (default: 30s)
+- **TRANSFORM_TIMEOUT**: Transformation timeout (default: 10s)
+
+## Examples
+
+### Simple HTTP Source
+
+Fetch JSON configuration from an API:
+
+```yaml
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: app-config
+  namespace: default
+spec:
+  interval: 10m
+  destinationPath: config.json
+  generator:
+    type: http
+    http:
+      url: https://config-api.example.com/app/config
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+### Authenticated HTTP Source
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+Fetch data with authentication headers:
 
-```sh
-kubectl apply -k config/samples/
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-token
+  namespace: default
+type: Opaque
+data:
+  Authorization: Bearer <base64-encoded-token>
+---
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: secure-config
+  namespace: default
+spec:
+  interval: 5m
+  generator:
+    type: http
+    http:
+      url: https://secure-api.example.com/config
+      headersSecretRef:
+        name: api-token
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+### Data Transformation
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+Transform API response before packaging:
 
-```sh
-kubectl delete -k config/samples/
+```yaml
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: transformed-config
+  namespace: default
+spec:
+  interval: 15m
+  destinationPath: app-config.yaml
+  generator:
+    type: http
+    http:
+      url: https://api.example.com/raw-config
+  transform:
+    type: cel
+    expression: |
+      {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {"name": "app-config"},
+        "data": {"config.json": string(data)}
+      }
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
+### Custom TLS Configuration
 
-```sh
-make uninstall
+Use custom CA bundle for TLS verification:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: custom-ca
+  namespace: default
+type: Opaque
+data:
+  ca.crt: <base64-encoded-ca-certificate>
+---
+apiVersion: source.example.com/v1alpha1
+kind: ExternalSource
+metadata:
+  name: tls-config
+  namespace: default
+spec:
+  interval: 30m
+  generator:
+    type: http
+    http:
+      url: https://internal-api.company.com/config
+      caBundleSecretRef:
+        name: custom-ca
+        key: ca.crt
 ```
 
-**UnDeploy the controller from the cluster:**
+## Monitoring and Observability
 
-```sh
-make undeploy
+### Status Conditions
+
+ExternalSource resources provide detailed status information:
+
+```bash
+kubectl describe externalsource my-config
 ```
 
-## Project Distribution
+Status conditions include:
+- **Ready**: Overall health of the ExternalSource
+- **Fetching**: Currently fetching data from external source
+- **Transforming**: Currently applying transformations
+- **Storing**: Currently storing artifact
+- **Stalled**: Reconciliation has been stalled due to errors
 
-Following the options to release and provide this solution to the users.
+### Prometheus Metrics
 
-### By providing a bundle with all YAML files
+The controller exposes metrics at `/metrics` endpoint:
 
-1. Build the installer for the image built and published in the registry:
+- `externalsource_reconcile_total`: Total number of reconciliations
+- `externalsource_reconcile_duration_seconds`: Reconciliation duration
+- `externalsource_http_request_duration_seconds`: HTTP request latency
+- `externalsource_transform_duration_seconds`: Transformation duration
 
-```sh
-make build-installer IMG=<some-registry>/fx-controller:tag
+### Logs
+
+View controller logs for detailed troubleshooting:
+
+```bash
+kubectl logs -n fx-system deployment/fx-controller-manager
 ```
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
+## Flux Integration
 
-2. Using the installer
+### Consuming ExternalArtifacts
 
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
+Use ExternalArtifact resources in Flux Kustomization:
 
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/fx-controller/<tag or branch>/dist/install.yaml
+```yaml
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: app-deployment
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: ExternalArtifact
+    name: app-config
+    namespace: default
+  path: "./"
+  prune: true
 ```
 
-### By providing a Helm Chart
+### GitOps Workflow
 
-1. Build the chart using the optional helm plugin
+1. ExternalSource fetches data from external API
+2. Controller packages data as versioned artifact
+3. ExternalArtifact resource is created/updated
+4. Flux Kustomization consumes the artifact
+5. Application configuration is deployed to cluster
 
-```sh
-kubebuilder edit --plugins=helm/v1-alpha
+## Troubleshooting
+
+### Common Issues
+
+**ExternalSource stuck in "Fetching" state:**
+- Check network connectivity to external API
+- Verify authentication credentials in referenced secrets
+- Review controller logs for detailed error messages
+
+**Transformation failures:**
+- Validate CEL expression syntax
+- Ensure input data format matches expression expectations
+- Check transformation timeout settings
+
+**Artifact storage issues:**
+- Verify S3 credentials and permissions
+- Check storage backend configuration
+- Ensure sufficient storage space
+
+### Debug Commands
+
+```bash
+# Check ExternalSource status
+kubectl get externalsource -A
+
+# View detailed status
+kubectl describe externalsource <name>
+
+# Check controller logs
+kubectl logs -n fx-system deployment/fx-controller-manager
+
+# View metrics
+kubectl port-forward -n fx-system svc/fx-controller-metrics 8080:8080
+curl http://localhost:8080/metrics
 ```
 
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
+## Development
 
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
+### Prerequisites
+
+- Go 1.24+
+- Docker or Podman
+- kubectl
+- Kind (for local testing)
+
+### Building
+
+```bash
+# Build binary
+make build
+
+# Run tests
+make test
+
+# Build container image
+make docker-build IMG=fx-controller:dev
+
+# Run locally (requires cluster access)
+make run
+```
+
+### Testing
+
+```bash
+# Unit tests
+make test
+
+# Integration tests
+make test-integration
+
+# End-to-end tests
+make test-e2e
+```
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
 
-**NOTE:** Run `make help` for more information on all potential `make` targets
+We welcome pull requests! Please see [Developer Documentation](docs/development.md) for detailed guidance of setting up a development environment.
 
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+### Adding New Source Types
+
+The controller is designed for extensibility. To add a new source type:
+
+1. Implement the `SourceGenerator` interface
+2. Register the generator with the factory
+3. Update the CRD schema
+4. Add tests and documentation
+
+See [Extending Source Generators](docs/extending-generators.md) for more information.
 
 ## License
 
