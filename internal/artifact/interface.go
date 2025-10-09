@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// Package artifact provides interfaces and types for managing external source artifacts.
 package artifact
 
 import (
@@ -27,6 +28,8 @@ import (
 )
 
 // ArtifactManager defines the interface for artifact packaging and management
+//
+//nolint:revive // Clear naming is more important than avoiding "stuttering"
 type ArtifactManager interface {
 	// Package creates an artifact from the given data and path
 	Package(ctx context.Context, data []byte, path string) (*Artifact, error)

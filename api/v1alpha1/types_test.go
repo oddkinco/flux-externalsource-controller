@@ -29,6 +29,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const testModifiedURL = "https://modified.example.com"
+
 func TestExternalSourceDeepCopy(t *testing.T) {
 	original := &ExternalSource{
 		ObjectMeta: metav1.ObjectMeta{
@@ -66,7 +68,7 @@ func TestExternalSourceDeepCopy(t *testing.T) {
 
 	// Verify deep copy (modifying copy doesn't affect original)
 	copied.Name = "modified-name"
-	copied.Spec.Generator.HTTP.URL = "https://modified.example.com"
+	copied.Spec.Generator.HTTP.URL = testModifiedURL
 
 	assert.NotEqual(t, original.Name, copied.Name)
 	assert.NotEqual(t, original.Spec.Generator.HTTP.URL, copied.Spec.Generator.HTTP.URL)
@@ -141,7 +143,7 @@ func TestExternalSourceSpecDeepCopy(t *testing.T) {
 	assert.Equal(t, original.Generator.Type, copied.Generator.Type)
 
 	// Modify copy and verify original is unchanged
-	copied.Generator.HTTP.URL = "https://modified.example.com"
+	copied.Generator.HTTP.URL = testModifiedURL
 	copied.Transform.Expression = "modified.expression"
 
 	assert.NotEqual(t, original.Generator.HTTP.URL, copied.Generator.HTTP.URL)
@@ -166,7 +168,7 @@ func TestGeneratorSpecDeepCopy(t *testing.T) {
 	assert.Equal(t, original.HTTP.URL, copied.HTTP.URL)
 
 	// Modify copy and verify original is unchanged
-	copied.HTTP.URL = "https://modified.example.com"
+	copied.HTTP.URL = testModifiedURL
 
 	assert.NotEqual(t, original.HTTP.URL, copied.HTTP.URL)
 }
@@ -186,7 +188,7 @@ func TestHTTPGeneratorSpecDeepCopy(t *testing.T) {
 	assert.Equal(t, original.Method, copied.Method)
 
 	// Modify copy and verify original is unchanged
-	copied.URL = "https://modified.example.com"
+	copied.URL = testModifiedURL
 
 	assert.NotEqual(t, original.URL, copied.URL)
 }

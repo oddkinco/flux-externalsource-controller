@@ -211,7 +211,7 @@ func TestConfigMapLoader_LoadFromData(t *testing.T) {
 		"unknown.field":     "should-be-ignored",
 	}
 
-	loader.loadFromData(data, config)
+	_ = loader.loadFromData(data, config)
 
 	assert.Equal(t, "s3", config.Storage.Backend)
 	assert.Equal(t, "test-bucket", config.Storage.S3.Bucket)

@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// Package controller implements the Kubernetes controller for ExternalSource resources.
 package controller
 
 import (
@@ -236,7 +237,7 @@ func (r *ExternalSourceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 
 			return ctrl.Result{RequeueAfter: retryDelay}, nil
-		} else {
+		} else { //nolint:revive // Complex error handling logic is clearer with explicit else
 			// Max retries exceeded, permanent error, or configuration error
 			var reason, message string
 
@@ -633,8 +634,11 @@ func (r *ExternalSourceReconciler) getConditionMessage(externalSource *sourcev1a
 type ErrorType int
 
 const (
+	// TransientError represents a temporary error that may be retried
 	TransientError ErrorType = iota
+	// PermanentError represents an error that should not be retried
 	PermanentError
+	// ConfigurationError represents an error in the resource configuration
 	ConfigurationError
 )
 

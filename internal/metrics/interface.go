@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// Package metrics provides interfaces and implementations for collecting operational metrics.
 package metrics
 
 import (
@@ -27,6 +28,8 @@ import (
 )
 
 // MetricsRecorder defines the interface for recording metrics
+//
+//nolint:revive // Clear naming is more important than avoiding "stuttering"
 type MetricsRecorder interface {
 	// RecordReconciliation records a reconciliation attempt with its outcome
 	RecordReconciliation(namespace, name, sourceType string, success bool, duration time.Duration)

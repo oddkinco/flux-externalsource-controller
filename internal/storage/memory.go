@@ -55,7 +55,7 @@ func NewMemoryBackend() *MemoryBackend {
 }
 
 // Store saves data in memory and returns a mock URL
-func (m *MemoryBackend) Store(ctx context.Context, key string, data []byte) (string, error) {
+func (m *MemoryBackend) Store(_ context.Context, key string, data []byte) (string, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -71,7 +71,7 @@ func (m *MemoryBackend) Store(ctx context.Context, key string, data []byte) (str
 }
 
 // List returns a list of keys with the given prefix
-func (m *MemoryBackend) List(ctx context.Context, prefix string) ([]string, error) {
+func (m *MemoryBackend) List(_ context.Context, prefix string) ([]string, error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
@@ -86,7 +86,7 @@ func (m *MemoryBackend) List(ctx context.Context, prefix string) ([]string, erro
 }
 
 // Delete removes an object from memory
-func (m *MemoryBackend) Delete(ctx context.Context, key string) error {
+func (m *MemoryBackend) Delete(_ context.Context, key string) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 

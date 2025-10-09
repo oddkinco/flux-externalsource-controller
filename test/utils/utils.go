@@ -20,6 +20,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// Package utils provides testing utilities for the ExternalSource controller.
+//
+//nolint:revive // "utils" is a clear and appropriate name for test utilities
 package utils
 
 import (

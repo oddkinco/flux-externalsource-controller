@@ -270,7 +270,7 @@ func (h *HTTPGenerator) parseConfig(ctx context.Context, config map[string]inter
 // configureHTTPClient creates an HTTP client with appropriate TLS configuration
 //
 //nolint:unparam // ctx parameter reserved for future use (e.g., timeout handling, tracing)
-func (h *HTTPGenerator) configureHTTPClient(ctx context.Context, config *HTTPConfig) (*http.Client, error) {
+func (h *HTTPGenerator) configureHTTPClient(_ context.Context, config *HTTPConfig) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: config.InsecureSkipVerify,

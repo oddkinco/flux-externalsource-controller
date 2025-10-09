@@ -8,6 +8,10 @@ on:
       - 'charts/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  packages: write
+
 env:
   REGISTRY: ghcr.io
 
@@ -95,5 +99,5 @@ jobs:
       if: steps.changes.outputs.charts-changed == 'true'
       run: |
         git add charts/flux-external-controller/Chart.yaml
-        git commit -m "chore: bump chart version to ${{ steps.bump-version.outputs.new-version }}" || exit 0
+        git commit -m "chore: bump chart version" || exit 0
         git push

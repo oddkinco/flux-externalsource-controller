@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Configuration
-CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-externalsource-controller:e2e}"
+CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-oddkin.co/flux-externalsource-controller:v0.0.1}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 NAMESPACE="${NAMESPACE:-flux-externalsource-controller-system}"
 KIND_CLUSTER="${KIND_CLUSTER:-flux-externalsource-controller-e2e}"
@@ -154,10 +154,10 @@ cleanup_test_environment() {
     log "Cleaning up test environment..."
     
     # Undeploy controller
-    make undeploy || warn "Failed to undeploy controller"
+    make undeploy ignore-not-found=true || warn "Failed to undeploy controller"
     
     # Uninstall CRDs
-    make uninstall || warn "Failed to uninstall CRDs"
+    make uninstall ignore-not-found=true || warn "Failed to uninstall CRDs"
     
     # Delete namespace
     kubectl delete namespace "$NAMESPACE" --ignore-not-found=true || warn "Failed to delete namespace"
@@ -172,16 +172,25 @@ main() {
     log "Kind Cluster: $KIND_CLUSTER"
     log "Namespace: $NAMESPACE"
     
+    # Track test result separately from cleanup
+    TEST_RESULT=0
+    
     # Trap to ensure cleanup on exit
-    trap 'cleanup_test_environment; cleanup_kind_cluster' EXIT
+    trap 'cleanup_test_environment; cleanup_kind_cluster; exit $TEST_RESULT' EXIT
     
     check_prerequisites
     setup_kind_cluster
     build_controller_image
     setup_test_environment
-    run_e2e_tests
     
-    log "All E2E tests passed successfully!"
+    # Run tests and capture result
+    if run_e2e_tests; then
+        log "All E2E tests passed successfully!"
+        TEST_RESULT=0
+    else
+        error "E2E tests failed!"
+        TEST_RESULT=1
+    fi
 }
 
 # Handle command line arguments

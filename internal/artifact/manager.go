@@ -49,7 +49,7 @@ func NewManager(backend storage.StorageBackend) *Manager {
 }
 
 // Package creates a .tar.gz archive from the given data and calculates SHA256 digest
-func (m *Manager) Package(ctx context.Context, data []byte, path string) (*Artifact, error) {
+func (m *Manager) Package(_ context.Context, data []byte, path string) (*Artifact, error) {
 	// Calculate SHA256 digest for content-based versioning
 	hash := sha256.Sum256(data)
 	revision := fmt.Sprintf("%x", hash)

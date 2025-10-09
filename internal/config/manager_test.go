@@ -20,14 +20,14 @@ func TestNewManager(t *testing.T) {
 	originalConfigMapNamespace := os.Getenv("CONFIG_MAP_NAMESPACE")
 	defer func() {
 		if originalConfigMapName != "" {
-			os.Setenv("CONFIG_MAP_NAME", originalConfigMapName)
+			_ = os.Setenv("CONFIG_MAP_NAME", originalConfigMapName)
 		} else {
-			os.Unsetenv("CONFIG_MAP_NAME")
+			_ = os.Unsetenv("CONFIG_MAP_NAME")
 		}
 		if originalConfigMapNamespace != "" {
-			os.Setenv("CONFIG_MAP_NAMESPACE", originalConfigMapNamespace)
+			_ = os.Setenv("CONFIG_MAP_NAMESPACE", originalConfigMapNamespace)
 		} else {
-			os.Unsetenv("CONFIG_MAP_NAMESPACE")
+			_ = os.Unsetenv("CONFIG_MAP_NAMESPACE")
 		}
 	}()
 
@@ -56,14 +56,14 @@ func TestNewManager(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variables if provided
 			if tt.configMapName != "" {
-				os.Setenv("CONFIG_MAP_NAME", tt.configMapName)
+				_ = os.Setenv("CONFIG_MAP_NAME", tt.configMapName)
 			} else {
-				os.Unsetenv("CONFIG_MAP_NAME")
+				_ = os.Unsetenv("CONFIG_MAP_NAME")
 			}
 			if tt.configMapNamespace != "" {
-				os.Setenv("CONFIG_MAP_NAMESPACE", tt.configMapNamespace)
+				_ = os.Setenv("CONFIG_MAP_NAMESPACE", tt.configMapNamespace)
 			} else {
-				os.Unsetenv("CONFIG_MAP_NAMESPACE")
+				_ = os.Unsetenv("CONFIG_MAP_NAMESPACE")
 			}
 
 			manager := NewManager(nil)
@@ -160,20 +160,20 @@ func TestManager_LoadConfig(t *testing.T) {
 				if val, exists := os.LookupEnv(key); exists {
 					originalEnv[key] = val
 				}
-				os.Unsetenv(key)
+				_ = os.Unsetenv(key)
 			}
 			defer func() {
 				for key := range tt.envVars {
-					os.Unsetenv(key)
+					_ = os.Unsetenv(key)
 					if val, exists := originalEnv[key]; exists {
-						os.Setenv(key, val)
+						_ = os.Setenv(key, val)
 					}
 				}
 			}()
 
 			// Set test environment variables
 			for key, value := range tt.envVars {
-				os.Setenv(key, value)
+				_ = os.Setenv(key, value)
 			}
 
 			// Create fake client
@@ -213,11 +213,11 @@ func TestManager_LoadConfigWithoutClient(t *testing.T) {
 	manager := NewManager(nil)
 
 	// Set some environment variables
-	os.Setenv("STORAGE_BACKEND", "memory")
-	os.Setenv("HTTP_USER_AGENT", "test-agent/1.0")
+	_ = os.Setenv("STORAGE_BACKEND", "memory")
+	_ = os.Setenv("HTTP_USER_AGENT", "test-agent/1.0")
 	defer func() {
-		os.Unsetenv("STORAGE_BACKEND")
-		os.Unsetenv("HTTP_USER_AGENT")
+		_ = os.Unsetenv("STORAGE_BACKEND")
+		_ = os.Unsetenv("HTTP_USER_AGENT")
 	}()
 
 	config, err := manager.LoadConfig(context.Background())
@@ -277,12 +277,12 @@ func TestGetEnvOrDefault(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clean up environment
-			os.Unsetenv(tt.envVar)
+			_ = os.Unsetenv(tt.envVar)
 
 			// Set environment variable if provided
 			if tt.envValue != "" {
-				os.Setenv(tt.envVar, tt.envValue)
-				defer os.Unsetenv(tt.envVar)
+				_ = os.Setenv(tt.envVar, tt.envValue)
+				defer func() { _ = os.Unsetenv(tt.envVar) }()
 			}
 
 			result := getEnvOrDefault(tt.envVar, tt.defaultValue)

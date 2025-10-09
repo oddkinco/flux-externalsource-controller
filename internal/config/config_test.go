@@ -57,15 +57,15 @@ func TestLoadFromEnvironment(t *testing.T) {
 		if val, exists := os.LookupEnv(env); exists {
 			originalEnv[env] = val
 		}
-		os.Unsetenv(env)
+		_ = os.Unsetenv(env)
 	}
 
 	// Restore environment after test
 	defer func() {
 		for _, env := range envVars {
-			os.Unsetenv(env)
+			_ = os.Unsetenv(env)
 			if val, exists := originalEnv[env]; exists {
-				os.Setenv(env, val)
+				_ = os.Setenv(env, val)
 			}
 		}
 	}()
@@ -156,7 +156,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variables
 			for key, value := range tt.envVars {
-				os.Setenv(key, value)
+				_ = os.Setenv(key, value)
 			}
 
 			// Create config and load from environment
@@ -168,7 +168,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 
 			// Clean up environment variables
 			for key := range tt.envVars {
-				os.Unsetenv(key)
+				_ = os.Unsetenv(key)
 			}
 		})
 	}
@@ -286,15 +286,15 @@ func TestLoadFromEnvironmentWithInvalidValues(t *testing.T) {
 		if val, exists := os.LookupEnv(env); exists {
 			originalEnv[env] = val
 		}
-		os.Unsetenv(env)
+		_ = os.Unsetenv(env)
 	}
 
 	// Restore environment after test
 	defer func() {
 		for _, env := range envVars {
-			os.Unsetenv(env)
+			_ = os.Unsetenv(env)
 			if val, exists := originalEnv[env]; exists {
-				os.Setenv(env, val)
+				_ = os.Setenv(env, val)
 			}
 		}
 	}()
@@ -336,14 +336,14 @@ func TestLoadFromEnvironmentWithInvalidValues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv(tt.envVar, tt.value)
+			_ = os.Setenv(tt.envVar, tt.value)
 
 			config := DefaultConfig()
 			config.LoadFromEnvironment()
 
 			tt.check(t, config)
 
-			os.Unsetenv(tt.envVar)
+			_ = os.Unsetenv(tt.envVar)
 		})
 	}
 }

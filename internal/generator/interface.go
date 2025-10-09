@@ -39,6 +39,8 @@ type SourceGenerator interface {
 }
 
 // GeneratorConfig holds configuration for source generators
+//
+//nolint:revive // Clear naming is more important than avoiding "stuttering"
 type GeneratorConfig struct {
 	Type   string                 `json:"type"`
 	Config map[string]interface{} `json:"config"`

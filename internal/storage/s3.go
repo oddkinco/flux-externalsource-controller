@@ -96,7 +96,7 @@ func (s *S3Backend) Store(ctx context.Context, key string, data []byte) (string,
 		return "", fmt.Errorf("failed to upload to S3: %w", err)
 	}
 	defer func() {
-		if err := resp.Body.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
+		if err := resp.Body.Close(); err != nil { //nolint:staticcheck,revive // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
 			// Log error but don't fail the operation
 		}
 	}()
@@ -132,7 +132,7 @@ func (s *S3Backend) List(ctx context.Context, prefix string) ([]string, error) {
 		return nil, fmt.Errorf("failed to list objects: %w", err)
 	}
 	defer func() {
-		if err := resp.Body.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
+		if err := resp.Body.Close(); err != nil { //nolint:staticcheck,revive // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
 			// Log error but don't fail the operation
 		}
 	}()
@@ -176,7 +176,7 @@ func (s *S3Backend) Delete(ctx context.Context, key string) error {
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
 	defer func() {
-		if err := resp.Body.Close(); err != nil { //nolint:staticcheck // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
+		if err := resp.Body.Close(); err != nil { //nolint:staticcheck,revive // SA9003: Intentionally empty - we don't want to fail S3 operations due to close errors
 			// Log error but don't fail the operation
 		}
 	}()

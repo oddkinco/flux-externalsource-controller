@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// Package storage provides interfaces and implementations for artifact storage backends.
 package storage
 
 import (
@@ -27,6 +28,8 @@ import (
 )
 
 // StorageBackend defines the interface for artifact storage backends
+//
+//nolint:revive // Clear naming is more important than avoiding "stuttering"
 type StorageBackend interface {
 	// Store uploads data to the storage backend and returns the URL
 	Store(ctx context.Context, key string, data []byte) (string, error)

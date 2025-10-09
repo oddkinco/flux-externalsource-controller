@@ -43,7 +43,7 @@ func TestHTTPGenerator_SupportsConditionalFetch(t *testing.T) {
 
 func TestHTTPGenerator_Generate_Success(t *testing.T) {
 	// Create test HTTP server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("ETag", "test-etag")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -81,7 +81,7 @@ func TestHTTPGenerator_Generate_Success(t *testing.T) {
 
 func TestHTTPGenerator_Generate_HTTPError(t *testing.T) {
 	// Create test HTTP server that returns error
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
@@ -150,7 +150,7 @@ func TestHTTPGenerator_GetLastModified_Success(t *testing.T) {
 
 func TestHTTPGenerator_GetLastModified_HTTPError(t *testing.T) {
 	// Create test HTTP server that returns error
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer server.Close()

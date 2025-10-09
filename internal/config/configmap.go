@@ -35,6 +35,8 @@ import (
 )
 
 // ConfigMapLoader loads configuration from a Kubernetes ConfigMap
+//
+//nolint:revive // Clear naming is more important than avoiding "stuttering"
 type ConfigMapLoader struct {
 	client    client.Client
 	namespace string

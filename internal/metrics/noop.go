@@ -35,31 +35,31 @@ func NewNoOpRecorder() MetricsRecorder {
 }
 
 // RecordReconciliation does nothing
-func (r *NoOpRecorder) RecordReconciliation(namespace, name, sourceType string, success bool, duration time.Duration) {
+func (r *NoOpRecorder) RecordReconciliation(_, _, _ string, _ bool, _ time.Duration) {
 	// No-op
 }
 
 // RecordSourceRequest does nothing
-func (r *NoOpRecorder) RecordSourceRequest(sourceType string, success bool, duration time.Duration) {
+func (r *NoOpRecorder) RecordSourceRequest(_ string, _ bool, _ time.Duration) {
 	// No-op
 }
 
 // RecordTransformation does nothing
-func (r *NoOpRecorder) RecordTransformation(success bool, duration time.Duration) {
+func (r *NoOpRecorder) RecordTransformation(_ bool, _ time.Duration) {
 	// No-op
 }
 
 // RecordArtifactOperation does nothing
-func (r *NoOpRecorder) RecordArtifactOperation(operation string, success bool, duration time.Duration) {
+func (r *NoOpRecorder) RecordArtifactOperation(_ string, _ bool, _ time.Duration) {
 	// No-op
 }
 
 // IncActiveReconciliations does nothing
-func (r *NoOpRecorder) IncActiveReconciliations(namespace, name string) {
+func (r *NoOpRecorder) IncActiveReconciliations(_, _ string) {
 	// No-op
 }
 
 // DecActiveReconciliations does nothing
-func (r *NoOpRecorder) DecActiveReconciliations(namespace, name string) {
+func (r *NoOpRecorder) DecActiveReconciliations(_, _ string) {
 	// No-op
 }

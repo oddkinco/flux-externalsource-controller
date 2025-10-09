@@ -32,7 +32,7 @@ type mockGenerator struct {
 	name string
 }
 
-func (m *mockGenerator) Generate(ctx context.Context, config GeneratorConfig) (*SourceData, error) {
+func (m *mockGenerator) Generate(_ context.Context, _ GeneratorConfig) (*SourceData, error) {
 	return &SourceData{
 		Data:         []byte("mock data"),
 		LastModified: "mock-etag",
@@ -44,7 +44,7 @@ func (m *mockGenerator) SupportsConditionalFetch() bool {
 	return true
 }
 
-func (m *mockGenerator) GetLastModified(ctx context.Context, config GeneratorConfig) (string, error) {
+func (m *mockGenerator) GetLastModified(_ context.Context, _ GeneratorConfig) (string, error) {
 	return "mock-etag", nil
 }
 

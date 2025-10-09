@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" //nolint:revive // Ginkgo/Gomega convention
+	. "github.com/onsi/gomega"    //nolint:revive // Ginkgo/Gomega convention
 )
 
 func TestCELTransformer(t *testing.T) {
