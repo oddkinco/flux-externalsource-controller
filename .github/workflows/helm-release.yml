@@ -44,11 +44,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install chart-releaser
-      run: |
-        curl -sSLo cr.tar.gz "https://github.com/helm/chart-releaser/releases/download/v1.6.0/chart-releaser_1.6.0_linux_amd64.tar.gz"
-        tar -xzf cr.tar.gz
-        sudo mv cr /usr/local/bin/cr
+
 
     - name: Check for chart changes
       id: changes
@@ -60,6 +56,7 @@ jobs:
         fi
 
     - name: Bump chart version
+      id: bump-version
       if: steps.changes.outputs.charts-changed == 'true'
       run: |
         # Get current version
@@ -77,23 +74,28 @@ jobs:
     - name: Package and release chart
       if: steps.changes.outputs.charts-changed == 'true'
       run: |
-        # Create packages directory
-        mkdir -p .cr-release-packages
-        
         # Package chart
-        helm package charts/flux-externalsource-controller --destination .cr-release-packages
+        helm package charts/flux-externalsource-controller
         
         # Push to OCI registry
-        helm push .cr-release-packages/flux-externalsource-controller-*.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
-
-    - name: Create GitHub release for chart
-      if: steps.changes.outputs.charts-changed == 'true'
-      run: |
-        # Upload chart to GitHub releases
-        cr upload -o ${{ github.repository_owner }} -r ${{ github.event.repository.name }} --token ${{ secrets.GITHUB_TOKEN }}
+        helm push flux-externalsource-controller-*.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
         
-        # Update index
-        cr index -o ${{ github.repository_owner }} -r ${{ github.event.repository.name }} --charts-repo https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }} --token ${{ secrets.GITHUB_TOKEN }}
+        echo "Chart pushed to oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts"
+
+    - name: Create GitHub release
+      if: steps.changes.outputs.charts-changed == 'true'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: helm-chart-v${{ steps.bump-version.outputs.new-version }}
+        name: Helm Chart v${{ steps.bump-version.outputs.new-version }}
+        body: |
+          ## Helm Chart Release v${{ steps.bump-version.outputs.new-version }}
+          
+          ### Installation
+          ```bash
+          helm install flux-externalsource-controller oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/flux-externalsource-controller --version ${{ steps.bump-version.outputs.new-version }}
+          ```
+        files: flux-externalsource-controller-*.tgz
 
     - name: Commit version bump
       if: steps.changes.outputs.charts-changed == 'true'
