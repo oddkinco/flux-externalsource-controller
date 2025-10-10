@@ -33,7 +33,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oddkin/flux-externalsource-controller/internal/storage"
+	"github.com/oddkinco/flux-externalsource-controller/internal/storage"
 )
 
 // Manager implements the ArtifactManager interface

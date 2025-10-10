@@ -202,7 +202,7 @@ CRDs are not automatically upgraded by Helm. To upgrade CRDs:
 
 ```bash
 # Download and apply latest CRDs
-kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/latest/download/crds.yaml
+kubectl apply -f https://github.com/oddkinco/flux-externalsource-controller/releases/latest/download/crds.yaml
 ```
 
 ## Uninstalling
@@ -262,7 +262,7 @@ The controller exposes health check endpoints:
 
 ```bash
 # Clone the repository
-git clone https://github.com/oddkin/flux-externalsource-controller.git
+git clone https://github.com/oddkinco/flux-externalsource-controller.git
 cd flux-externalsource-controller
 
 # Install chart locally
@@ -281,6 +281,6 @@ helm template flux-externalsource-controller ./charts/flux-externalsource-contro
 
 ## Support
 
-- GitHub Issues: https://github.com/oddkin/flux-externalsource-controller/issues
-- Documentation: https://github.com/oddkin/flux-externalsource-controller/tree/main/docs
-- Discussions: https://github.com/oddkin/flux-externalsource-controller/discussions
+- GitHub Issues: https://github.com/oddkinco/flux-externalsource-controller/issues
+- Documentation: https://github.com/oddkinco/flux-externalsource-controller/tree/main/docs
+- Discussions: https://github.com/oddkinco/flux-externalsource-controller/discussions

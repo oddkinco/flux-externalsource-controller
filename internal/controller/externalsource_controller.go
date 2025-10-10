@@ -38,13 +38,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	sourcev1alpha1 "github.com/oddkin/flux-externalsource-controller/api/v1alpha1"
-	"github.com/oddkin/flux-externalsource-controller/internal/artifact"
-	"github.com/oddkin/flux-externalsource-controller/internal/config"
-	"github.com/oddkin/flux-externalsource-controller/internal/generator"
-	"github.com/oddkin/flux-externalsource-controller/internal/metrics"
-	"github.com/oddkin/flux-externalsource-controller/internal/storage"
-	"github.com/oddkin/flux-externalsource-controller/internal/transformer"
+	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
+	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
+	"github.com/oddkinco/flux-externalsource-controller/internal/config"
+	"github.com/oddkinco/flux-externalsource-controller/internal/generator"
+	"github.com/oddkinco/flux-externalsource-controller/internal/metrics"
+	"github.com/oddkinco/flux-externalsource-controller/internal/storage"
+	"github.com/oddkinco/flux-externalsource-controller/internal/transformer"
 )
 
 // ExternalSourceReconciler reconciles a ExternalSource object

@@ -7,7 +7,7 @@ domain: flux.oddkin.co
 layout:
 - go.kubebuilder.io/v4
 projectName: flux-externalsource-controller
-repo: github.com/oddkin/flux-externalsource-controller
+repo: github.com/oddkinco/flux-externalsource-controller
 resources:
 - api:
     crdVersion: v1
@@ -16,7 +16,7 @@ resources:
   domain: flux.oddkin.co
   group: source
   kind: ExternalSource
-  path: github.com/oddkin/flux-externalsource-controller/api/v1alpha1
+  path: github.com/oddkinco/flux-externalsource-controller/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -24,6 +24,6 @@ resources:
   domain: flux.oddkin.co
   group: source
   kind: ExternalArtifact
-  path: github.com/oddkin/flux-externalsource-controller/api/v1alpha1
+  path: github.com/oddkinco/flux-externalsource-controller/api/v1alpha1
   version: v1alpha1
 version: "3"

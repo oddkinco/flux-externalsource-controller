@@ -1,4 +1,4 @@
-module github.com/oddkin/flux-externalsource-controller
+module github.com/oddkinco/flux-externalsource-controller
 
 go 1.24.6
 

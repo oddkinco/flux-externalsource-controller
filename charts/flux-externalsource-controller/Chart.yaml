@@ -4,9 +4,9 @@ description: A Helm chart for ExternalSource Controller - integrates external da
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/oddkin/flux-externalsource-controller
+home: https://github.com/oddkinco/flux-externalsource-controller
 sources:
-  - https://github.com/oddkin/flux-externalsource-controller
+  - https://github.com/oddkinco/flux-externalsource-controller
 maintainers:
   - name: "Odd Kin"
     email: oddkin@oddkin.co

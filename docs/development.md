@@ -26,7 +26,7 @@ The ExternalSource Controller follows a modular architecture that enables easy e
 
 1. **Clone and setup:**
    ```bash
-   git clone https://github.com/oddkin/flux-externalsource-controller.git
+   git clone https://github.com/oddkinco/flux-externalsource-controller.git
    cd flux-externalsource-controller
    go mod download
    ```

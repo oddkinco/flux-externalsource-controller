@@ -38,19 +38,19 @@ The ExternalSource Controller is a Kubernetes operator built using the Kubebuild
 
 1. **Install the CRDs:**
    ```bash
-   kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/latest/download/crds.yaml
+   kubectl apply -f https://github.com/oddkinco/flux-externalsource-controller/releases/latest/download/crds.yaml
    ```
 
 2. **Deploy the controller:**
    ```bash
-   kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/latest/download/flux-externalsource-controller.yaml
+   kubectl apply -f https://github.com/oddkinco/flux-externalsource-controller/releases/latest/download/flux-externalsource-controller.yaml
    ```
 
 #### Option 2: Build from Source
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/oddkin/flux-externalsource-controller.git
+   git clone https://github.com/oddkinco/flux-externalsource-controller.git
    cd flux-externalsource-controller
    ```
 

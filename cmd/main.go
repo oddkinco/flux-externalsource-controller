@@ -42,10 +42,10 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	sourcev1alpha1 "github.com/oddkin/flux-externalsource-controller/api/v1alpha1"
-	"github.com/oddkin/flux-externalsource-controller/internal/config"
-	"github.com/oddkin/flux-externalsource-controller/internal/controller"
-	"github.com/oddkin/flux-externalsource-controller/internal/metrics"
+	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
+	"github.com/oddkinco/flux-externalsource-controller/internal/config"
+	"github.com/oddkinco/flux-externalsource-controller/internal/controller"
+	"github.com/oddkinco/flux-externalsource-controller/internal/metrics"
 	// +kubebuilder:scaffold:imports
 )
 

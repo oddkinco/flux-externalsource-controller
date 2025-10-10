@@ -28,7 +28,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m
-  url: https://github.com/oddkin/app-manifests
+  url: https://github.com/oddkinco/app-manifests
   ref:
     branch: main
 

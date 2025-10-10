@@ -34,7 +34,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/oddkin/flux-externalsource-controller/test/utils"
+	"github.com/oddkinco/flux-externalsource-controller/test/utils"
 )
 
 var _ = Describe("Flux Integration", Ordered, func() {

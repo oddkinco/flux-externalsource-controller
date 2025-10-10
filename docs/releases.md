@@ -226,11 +226,11 @@ helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-ext
 **Installation from GitHub:**
 ```bash
 # Direct installation
-kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/download/v1.0.0/install.yaml
+kubectl apply -f https://github.com/oddkinco/flux-externalsource-controller/releases/download/v1.0.0/install.yaml
 
 # Download and verify
-curl -LO https://github.com/oddkin/flux-externalsource-controller/releases/download/v1.0.0/flux-externalsource-controller-1.0.0.tgz
-curl -LO https://github.com/oddkin/flux-externalsource-controller/releases/download/v1.0.0/checksums.txt
+curl -LO https://github.com/oddkinco/flux-externalsource-controller/releases/download/v1.0.0/flux-externalsource-controller-1.0.0.tgz
+curl -LO https://github.com/oddkinco/flux-externalsource-controller/releases/download/v1.0.0/checksums.txt
 sha256sum -c checksums.txt
 ```
 
