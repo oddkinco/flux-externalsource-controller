@@ -63,13 +63,13 @@ jobs:
       if: steps.changes.outputs.charts-changed == 'true'
       run: |
         # Get current version
-        CURRENT_VERSION=$(grep '^version:' charts/flux-external-controller/Chart.yaml | awk '{print $2}')
+        CURRENT_VERSION=$(grep '^version:' charts/flux-externalsource-controller/Chart.yaml | awk '{print $2}')
         
         # Increment patch version
         NEW_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
         
         # Update Chart.yaml
-        sed -i "s/version: $CURRENT_VERSION/version: $NEW_VERSION/" charts/flux-external-controller/Chart.yaml
+        sed -i "s/version: $CURRENT_VERSION/version: $NEW_VERSION/" charts/flux-externalsource-controller/Chart.yaml
         
         echo "Updated chart version from $CURRENT_VERSION to $NEW_VERSION"
         echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
@@ -81,10 +81,10 @@ jobs:
         mkdir -p .cr-release-packages
         
         # Package chart
-        helm package charts/flux-external-controller --destination .cr-release-packages
+        helm package charts/flux-externalsource-controller --destination .cr-release-packages
         
         # Push to OCI registry
-        helm push .cr-release-packages/flux-external-controller-*.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
+        helm push .cr-release-packages/flux-externalsource-controller-*.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
 
     - name: Create GitHub release for chart
       if: steps.changes.outputs.charts-changed == 'true'
@@ -98,6 +98,6 @@ jobs:
     - name: Commit version bump
       if: steps.changes.outputs.charts-changed == 'true'
       run: |
-        git add charts/flux-external-controller/Chart.yaml
+        git add charts/flux-externalsource-controller/Chart.yaml
         git commit -m "chore: bump chart version" || exit 0
         git push

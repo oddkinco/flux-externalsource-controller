@@ -43,7 +43,7 @@ The ExternalSource Controller is a Kubernetes operator built using the Kubebuild
 
 2. **Deploy the controller:**
    ```bash
-   kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/latest/download/flux-external-controller.yaml
+   kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releases/latest/download/flux-externalsource-controller.yaml
    ```
 
 #### Option 2: Build from Source
@@ -61,8 +61,8 @@ The ExternalSource Controller is a Kubernetes operator built using the Kubebuild
 
 3. **Build and deploy:**
    ```bash
-   make docker-build docker-push IMG=<your-registry>/flux-external-controller:latest
-   make deploy IMG=<your-registry>/flux-external-controller:latest
+   make docker-build docker-push IMG=<your-registry>/flux-externalsource-controller:latest
+   make deploy IMG=<your-registry>/flux-externalsource-controller:latest
    ```
 
 ### Basic Usage
@@ -289,7 +289,7 @@ The controller exposes metrics at `/metrics` endpoint:
 View controller logs for detailed troubleshooting:
 
 ```bash
-kubectl logs -n flux-external-controller-system deployment/flux-external-controller-manager
+kubectl logs -n flux-externalsource-controller-system deployment/flux-externalsource-controller-manager
 ```
 
 ## Flux Integration
@@ -351,10 +351,10 @@ kubectl get externalsource -A
 kubectl describe externalsource <name>
 
 # Check controller logs
-kubectl logs -n flux-external-controller-system deployment/flux-external-controller-manager
+kubectl logs -n flux-externalsource-controller-system deployment/flux-externalsource-controller-manager
 
 # View metrics
-kubectl port-forward -n flux-external-controller-system svc/flux-external-controller-metrics 8080:8080
+kubectl port-forward -n flux-externalsource-controller-system svc/flux-externalsource-controller-metrics 8080:8080
 curl http://localhost:8080/metrics
 ```
 
@@ -377,7 +377,7 @@ make build
 make test
 
 # Build container image
-make docker-build IMG=flux-external-controller:dev
+make docker-build IMG=flux-externalsource-controller:dev
 
 # Run locally (requires cluster access)
 make run

@@ -1,4 +1,4 @@
-# flux-external-controller Helm Chart
+# flux-externalsource-controller Helm Chart
 
 A Helm chart for deploying the ExternalSource Controller, which integrates external data sources into GitOps workflows powered by Flux.
 
@@ -13,7 +13,7 @@ A Helm chart for deploying the ExternalSource Controller, which integrates exter
 ### Add Helm Repository
 
 ```bash
-helm repo add flux-external-controller oci://ghcr.io/oddkin/charts
+helm repo add flux-externalsource-controller oci://ghcr.io/oddkin/charts
 helm repo update
 ```
 
@@ -21,19 +21,19 @@ helm repo update
 
 ```bash
 # Install with default values
-helm install flux-external-controller flux-external-controller/flux-external-controller
+helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller
 
 # Install in custom namespace
-helm install flux-external-controller flux-external-controller/flux-external-controller --namespace flux-external-system --create-namespace
+helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller --namespace flux-external-system --create-namespace
 
 # Install with custom values
-helm install flux-external-controller flux-external-controller/flux-external-controller -f values.yaml
+helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller -f values.yaml
 ```
 
 ### Install from OCI Registry
 
 ```bash
-helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller --version 0.1.0
+helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller --version 0.1.0
 ```
 
 ## Configuration
@@ -52,7 +52,7 @@ The following table lists the configurable parameters and their default values.
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Controller image repository | `ghcr.io/oddkin/flux-external-controller` |
+| `image.repository` | Controller image repository | `ghcr.io/oddkin/flux-externalsource-controller` |
 | `image.tag` | Controller image tag | `""` (uses chart appVersion) |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `imagePullSecrets` | Image pull secrets | `[]` |
@@ -107,7 +107,7 @@ The following table lists the configurable parameters and their default values.
 ### Basic Installation
 
 ```bash
-helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller
+helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller
 ```
 
 ### Installation with S3 Storage
@@ -129,7 +129,7 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret-key=YOUR_SECRET_KEY
 
 # Install with S3 storage
-helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller -f values-s3.yaml
+helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller -f values-s3.yaml
 ```
 
 ### Installation with Monitoring
@@ -149,7 +149,7 @@ controller:
 ```
 
 ```bash
-helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller -f values-monitoring.yaml
+helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller -f values-monitoring.yaml
 ```
 
 ### High Availability Installation
@@ -169,7 +169,7 @@ controller:
             - key: app.kubernetes.io/name
               operator: In
               values:
-              - flux-external-controller
+              - flux-externalsource-controller
           topologyKey: kubernetes.io/hostname
 
 podDisruptionBudget:
@@ -178,7 +178,7 @@ podDisruptionBudget:
 ```
 
 ```bash
-helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-controller -f values-ha.yaml
+helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller -f values-ha.yaml
 ```
 
 ## Upgrading
@@ -187,13 +187,13 @@ helm install flux-external-controller oci://ghcr.io/oddkin/charts/flux-external-
 
 ```bash
 helm repo update
-helm upgrade flux-external-controller flux-external-controller/flux-external-controller
+helm upgrade flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller
 ```
 
 ### Upgrade with Custom Values
 
 ```bash
-helm upgrade flux-external-controller flux-external-controller/flux-external-controller -f values.yaml
+helm upgrade flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller -f values.yaml
 ```
 
 ### Upgrade CRDs
@@ -209,7 +209,7 @@ kubectl apply -f https://github.com/oddkin/flux-externalsource-controller/releas
 
 ```bash
 # Uninstall the chart
-helm uninstall flux-external-controller
+helm uninstall flux-externalsource-controller
 
 # Optionally remove CRDs (this will delete all ExternalSource and ExternalArtifact resources)
 kubectl delete crd externalsources.source.flux.oddkin.co externalartifacts.source.flux.oddkin.co
@@ -221,13 +221,13 @@ kubectl delete crd externalsources.source.flux.oddkin.co externalartifacts.sourc
 
 1. **Controller not starting:**
    ```bash
-   kubectl logs -n flux-external-system deployment/flux-external-controller-manager
-   kubectl describe deployment -n flux-external-system flux-external-controller-manager
+   kubectl logs -n flux-external-system deployment/flux-externalsource-controller-manager
+   kubectl describe deployment -n flux-external-system flux-externalsource-controller-manager
    ```
 
 2. **RBAC issues:**
    ```bash
-   kubectl auth can-i create externalsources --as=system:serviceaccount:flux-external-system:flux-external-controller-manager
+   kubectl auth can-i create externalsources --as=system:serviceaccount:flux-external-system:flux-externalsource-controller-manager
    ```
 
 3. **Storage backend issues:**
@@ -266,10 +266,10 @@ git clone https://github.com/oddkin/flux-externalsource-controller.git
 cd flux-externalsource-controller
 
 # Install chart locally
-helm install flux-external-controller ./charts/flux-external-controller --set image.tag=dev
+helm install flux-externalsource-controller ./charts/flux-externalsource-controller --set image.tag=dev
 
 # Test chart templates
-helm template flux-external-controller ./charts/flux-external-controller --debug
+helm template flux-externalsource-controller ./charts/flux-externalsource-controller --debug
 ```
 
 ### Contributing

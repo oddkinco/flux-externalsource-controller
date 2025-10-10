@@ -75,9 +75,9 @@ install_flux() {
     log_success "Flux installation completed"
 }
 
-# Deploy flux-external-controller
+# Deploy flux-externalsource-controller
 deploy_flux_external_controller() {
-    log_info "Deploying flux-external-controller..."
+    log_info "Deploying flux-externalsource-controller..."
     
     # Create namespace
     kubectl create namespace fx-system --dry-run=client -o yaml | kubectl apply -f -
@@ -86,11 +86,11 @@ deploy_flux_external_controller() {
     kubectl apply -f /test-cases/crds/
     
     # Apply RBAC and deployment
-    kubectl apply -f /test-cases/flux-external-controller/
+    kubectl apply -f /test-cases/flux-externalsource-controller/
     
     # Wait for deployment to be ready
-    kubectl wait --for=condition=Available deployment/flux-external-controller-manager -n fx-system --timeout=300s
-    log_success "flux-external-controller deployment completed"
+    kubectl wait --for=condition=Available deployment/flux-externalsource-controller-manager -n fx-system --timeout=300s
+    log_success "flux-externalsource-controller deployment completed"
 }
 
 # Setup test webserver service

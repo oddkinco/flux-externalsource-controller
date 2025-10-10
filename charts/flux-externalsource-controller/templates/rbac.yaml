@@ -2,9 +2,9 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "flux-external-controller.clusterRoleName" . }}
+  name: {{ include "flux-externalsource-controller.clusterRoleName" . }}
   labels:
-    {{- include "flux-external-controller.labels" . | nindent 4 }}
+    {{- include "flux-externalsource-controller.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - ""
@@ -49,26 +49,26 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "flux-external-controller.clusterRoleBindingName" . }}
+  name: {{ include "flux-externalsource-controller.clusterRoleBindingName" . }}
   labels:
-    {{- include "flux-external-controller.labels" . | nindent 4 }}
+    {{- include "flux-externalsource-controller.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "flux-external-controller.clusterRoleName" . }}
+  name: {{ include "flux-externalsource-controller.clusterRoleName" . }}
 subjects:
 - kind: ServiceAccount
-  name: {{ include "flux-external-controller.serviceAccountName" . }}
+  name: {{ include "flux-externalsource-controller.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "flux-external-controller.leaderElectionRoleName" . }}
+  name: {{ include "flux-externalsource-controller.leaderElectionRoleName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "flux-external-controller.labels" . | nindent 4 }}
+    {{- include "flux-externalsource-controller.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - ""
@@ -99,16 +99,16 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "flux-external-controller.leaderElectionRoleBindingName" . }}
+  name: {{ include "flux-externalsource-controller.leaderElectionRoleBindingName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "flux-external-controller.labels" . | nindent 4 }}
+    {{- include "flux-externalsource-controller.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "flux-external-controller.leaderElectionRoleName" . }}
+  name: {{ include "flux-externalsource-controller.leaderElectionRoleName" . }}
 subjects:
 - kind: ServiceAccount
-  name: {{ include "flux-external-controller.serviceAccountName" . }}
+  name: {{ include "flux-externalsource-controller.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

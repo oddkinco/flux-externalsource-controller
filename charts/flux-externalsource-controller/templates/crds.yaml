@@ -4,7 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   name: externalsources.source.flux.oddkin.co
   labels:
-    {{- include "flux-external-controller.labels" . | nindent 4 }}
+    {{- include "flux-externalsource-controller.labels" . | nindent 4 }}
   annotations:
     {{- if .Values.crds.keep }}
     "helm.sh/resource-policy": keep
@@ -116,7 +116,7 @@ kind: CustomResourceDefinition
 metadata:
   name: externalartifacts.source.flux.oddkin.co
   labels:
-    {{- include "flux-external-controller.labels" . | nindent 4 }}
+    {{- include "flux-externalsource-controller.labels" . | nindent 4 }}
   annotations:
     {{- if .Values.crds.keep }}
     "helm.sh/resource-policy": keep

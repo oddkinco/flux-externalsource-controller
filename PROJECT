@@ -6,7 +6,7 @@ cliVersion: 4.9.0
 domain: flux.oddkin.co
 layout:
 - go.kubebuilder.io/v4
-projectName: flux-external-controller
+projectName: flux-externalsource-controller
 repo: github.com/oddkin/flux-externalsource-controller
 resources:
 - api:

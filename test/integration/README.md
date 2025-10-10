@@ -20,7 +20,7 @@ The integration test environment includes:
 │                 │    │   Server        │    │   (S3 storage)  │
 │ - Kubernetes    │    │                 │    │                 │
 │ - Flux          │    │ - /api/v1/config│    │ - Artifact      │
-│ - flux-external-controller │    │ - /api/v1/users │    │   storage       │
+│ - flux-externalsource-controller │    │ - /api/v1/users │    │   storage       │
 │                 │    │ - /health       │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
@@ -175,7 +175,7 @@ The test environment supports several configuration options:
 
 2. **Check controller logs:**
    ```bash
-   kubectl logs -n fx-system deployment/flux-external-controller-manager -f
+   kubectl logs -n fx-system deployment/flux-externalsource-controller-manager -f
    ```
 
 3. **Inspect ExternalSource status:**

@@ -1,9 +1,9 @@
-# Default values for flux-external-controller
+# Default values for flux-externalsource-controller
 # This is a YAML-formatted file.
 
 # Controller image configuration
 image:
-  repository: ghcr.io/oddkin/flux-external-controller
+  repository: ghcr.io/oddkin/flux-externalsource-controller
   tag: ""  # Defaults to chart appVersion
   pullPolicy: IfNotPresent
 

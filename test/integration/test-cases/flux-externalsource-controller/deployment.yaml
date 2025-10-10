@@ -1,29 +1,29 @@
-# flux-external-controller deployment for integration testing
+# flux-externalsource-controller deployment for integration testing
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: flux-external-controller-manager
+  name: flux-externalsource-controller-manager
   namespace: fx-system
   labels:
-    app.kubernetes.io/name: flux-external-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     app.kubernetes.io/component: manager
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: flux-external-controller
+      app.kubernetes.io/name: flux-externalsource-controller
       app.kubernetes.io/component: manager
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: flux-external-controller
+        app.kubernetes.io/name: flux-externalsource-controller
         app.kubernetes.io/component: manager
     spec:
-      serviceAccountName: flux-external-controller-manager
+      serviceAccountName: flux-externalsource-controller-manager
       containers:
       - name: manager
         # Use a test image or build from source
-        image: flux-external-controller:test
+        image: flux-externalsource-controller:test
         imagePullPolicy: IfNotPresent
         command:
         - /manager
@@ -78,10 +78,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: flux-external-controller-metrics
+  name: flux-externalsource-controller-metrics
   namespace: fx-system
   labels:
-    app.kubernetes.io/name: flux-external-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     app.kubernetes.io/component: metrics
 spec:
   ports:
@@ -90,5 +90,5 @@ spec:
     protocol: TCP
     targetPort: 8080
   selector:
-    app.kubernetes.io/name: flux-external-controller
+    app.kubernetes.io/name: flux-externalsource-controller
     app.kubernetes.io/component: manager

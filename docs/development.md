@@ -651,7 +651,7 @@ dlv debug ./cmd/main.go -- --log-level=debug
 
 ```bash
 # Check controller logs
-kubectl logs -n flux-external-controller-system deployment/flux-external-controller-manager -f
+kubectl logs -n flux-externalsource-controller-system deployment/flux-externalsource-controller-manager -f
 
 # Debug ExternalSource status
 kubectl describe externalsource <name>
@@ -660,7 +660,7 @@ kubectl describe externalsource <name>
 kubectl get externalartifact -o yaml
 
 # View controller metrics
-kubectl port-forward -n flux-external-controller-system svc/flux-external-controller-metrics 8080:8080
+kubectl port-forward -n flux-externalsource-controller-system svc/flux-externalsource-controller-metrics 8080:8080
 curl http://localhost:8080/metrics
 ```
 

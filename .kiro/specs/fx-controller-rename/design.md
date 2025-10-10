@@ -2,7 +2,7 @@
 
 ## Overview
 
-This design outlines the comprehensive refactoring approach to rename "fx-controller" to "flux-external-controller", update the API group from "source.example.com" to "source.flux.oddkin.co", and change the Go module path from "github.com/example/fx-controller" to "github.com/oddkin/flux-externalsource-controller". The refactoring will be executed systematically to ensure all references are updated consistently across the entire codebase.
+This design outlines the comprehensive refactoring approach to rename "fx-controller" to "flux-externalsource-controller", update the API group from "source.example.com" to "source.flux.oddkin.co", and change the Go module path from "github.com/example/fx-controller" to "github.com/oddkin/flux-externalsource-controller". The refactoring will be executed systematically to ensure all references are updated consistently across the entire codebase.
 
 ## Architecture
 
@@ -18,7 +18,7 @@ The refactoring will follow a structured approach organized into logical groups:
 ### File System Changes
 
 **Directory Renaming:**
-- `charts/fx-controller/` → `charts/flux-external-controller/`
+- `charts/fx-controller/` → `charts/flux-externalsource-controller/`
 
 **File Renaming:**
 - All CRD files with `source.example.com` prefix will be regenerated with new names
@@ -60,7 +60,7 @@ The refactoring will follow a structured approach organized into logical groups:
 The following string replacements will be applied systematically:
 
 ```
-fx-controller → flux-external-controller
+fx-controller → flux-externalsource-controller
 source.example.com → source.flux.oddkin.co
 github.com/example/fx-controller → github.com/oddkin/flux-externalsource-controller
 ```

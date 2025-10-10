@@ -155,11 +155,11 @@ jobs:
 
     - name: Lint Helm chart
       run: |
-        helm lint charts/flux-external-controller
+        helm lint charts/flux-externalsource-controller
 
     - name: Validate Helm chart templates
       run: |
-        helm template flux-external-controller charts/flux-external-controller --debug
+        helm template flux-externalsource-controller charts/flux-externalsource-controller --debug
 
     - name: Run Helm chart tests
       run: |
@@ -169,7 +169,7 @@ jobs:
         sudo mv ct /usr/local/bin/
         
         # Run chart tests with config
-        ct lint --charts charts/flux-external-controller --config .github/ct.yaml || echo "Chart testing failed, but continuing..."
+        ct lint --charts charts/flux-externalsource-controller --config .github/ct.yaml || echo "Chart testing failed, but continuing..."
 
 
 

@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "flux-external-controller.fullname" . }}-manager
+  name: {{ include "flux-externalsource-controller.fullname" . }}-manager
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "flux-external-controller.labels" . | nindent 4 }}
+    {{- include "flux-externalsource-controller.labels" . | nindent 4 }}
     app.kubernetes.io/component: manager
   {{- with .Values.deploymentAnnotations }}
   annotations:
@@ -14,12 +14,12 @@ spec:
   replicas: {{ .Values.controller.replicas }}
   selector:
     matchLabels:
-      {{- include "flux-external-controller.selectorLabels" . | nindent 6 }}
+      {{- include "flux-externalsource-controller.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: manager
   template:
     metadata:
       labels:
-        {{- include "flux-external-controller.selectorLabels" . | nindent 8 }}
+        {{- include "flux-externalsource-controller.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: manager
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
@@ -33,7 +33,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "flux-external-controller.serviceAccountName" . }}
+      serviceAccountName: {{ include "flux-externalsource-controller.serviceAccountName" . }}
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . }}
       {{- end }}

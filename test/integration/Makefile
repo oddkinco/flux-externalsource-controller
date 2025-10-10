@@ -73,15 +73,15 @@ debug-cluster: ## Get cluster info for debugging
 	@echo "=== Service Status ==="
 	docker exec k0s-cluster k0s kubectl get services --all-namespaces || true
 
-debug-flux-external-controller: ## Debug flux-external-controller deployment
-	@echo "=== flux-external-controller Deployment ==="
+debug-flux-externalsource-controller: ## Debug flux-externalsource-controller deployment
+	@echo "=== flux-externalsource-controller Deployment ==="
 	docker exec k0s-cluster k0s kubectl get deployment -n fx-system || true
 	@echo ""
-	@echo "=== flux-external-controller Pods ==="
+	@echo "=== flux-externalsource-controller Pods ==="
 	docker exec k0s-cluster k0s kubectl get pods -n fx-system || true
 	@echo ""
-	@echo "=== flux-external-controller Logs ==="
-	docker exec k0s-cluster k0s kubectl logs -n fx-system deployment/flux-external-controller-manager --tail=50 || true
+	@echo "=== flux-externalsource-controller Logs ==="
+	docker exec k0s-cluster k0s kubectl logs -n fx-system deployment/flux-externalsource-controller-manager --tail=50 || true
 
 debug-flux: ## Debug Flux installation
 	@echo "=== Flux Pods ==="

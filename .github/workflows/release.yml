@@ -90,16 +90,16 @@ jobs:
 
     - name: Update Chart.yaml with release version
       run: |
-        sed -i "s/version: 0.1.0/version: ${{ steps.version.outputs.chart-version }}/" charts/flux-external-controller/Chart.yaml
-        sed -i "s/appVersion: \"0.1.0\"/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/flux-external-controller/Chart.yaml
+        sed -i "s/version: 0.1.0/version: ${{ steps.version.outputs.chart-version }}/" charts/flux-externalsource-controller/Chart.yaml
+        sed -i "s/appVersion: \"0.1.0\"/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/flux-externalsource-controller/Chart.yaml
 
     - name: Package Helm chart
       run: |
-        helm package charts/flux-external-controller --destination ./charts/
+        helm package charts/flux-externalsource-controller --destination ./charts/
 
     - name: Push Helm chart to OCI registry
       run: |
-        helm push ./charts/flux-external-controller-${{ steps.version.outputs.chart-version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
+        helm push ./charts/flux-externalsource-controller-${{ steps.version.outputs.chart-version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
 
   create-release-artifacts:
     runs-on: ubuntu-latest
@@ -135,7 +135,7 @@ jobs:
         cd config/default
         kustomize edit set image controller=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
         cd ../..
-        kustomize build config/default > dist/install/flux-external-controller.yaml
+        kustomize build config/default > dist/install/flux-externalsource-controller.yaml
 
         # Create combined installation file
         cat dist/install/*.yaml > dist/install.yaml
@@ -143,11 +143,11 @@ jobs:
     - name: Create Helm chart archive
       run: |
         # Update chart version
-        sed -i "s/version: 0.1.0/version: ${{ steps.version.outputs.version }}/" charts/flux-external-controller/Chart.yaml
-        sed -i "s/appVersion: \"0.1.0\"/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/flux-external-controller/Chart.yaml
+        sed -i "s/version: 0.1.0/version: ${{ steps.version.outputs.version }}/" charts/flux-externalsource-controller/Chart.yaml
+        sed -i "s/appVersion: \"0.1.0\"/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/flux-externalsource-controller/Chart.yaml
         
         # Package chart
-        helm package charts/flux-external-controller --destination ./dist/
+        helm package charts/flux-externalsource-controller --destination ./dist/
 
     - name: Generate checksums
       run: |
@@ -159,7 +159,7 @@ jobs:
       with:
         files: |
           dist/install.yaml
-          dist/flux-external-controller-*.tgz
+          dist/flux-externalsource-controller-*.tgz
           dist/checksums.txt
         generate_release_notes: true
         draft: false
@@ -188,18 +188,18 @@ jobs:
     - name: Update README with latest version
       run: |
         # Update installation commands in README
-        sed -i "s|ghcr.io/oddkin/flux-external-controller:.*|ghcr.io/oddkin/flux-external-controller:${{ steps.version.outputs.version }}|g" README.md
+        sed -i "s|ghcr.io/oddkin/flux-externalsource-controller:.*|ghcr.io/oddkin/flux-externalsource-controller:${{ steps.version.outputs.version }}|g" README.md
         sed -i "s|/releases/latest/download/|/releases/download/v${{ steps.version.outputs.version }}/|g" README.md
 
     - name: Update Helm chart documentation
       run: |
         # Update chart version references
-        sed -i "s/version: [0-9]\+\.[0-9]\+\.[0-9]\+/version: ${{ steps.version.outputs.version }}/g" charts/flux-external-controller/README.md || true
+        sed -i "s/version: [0-9]\+\.[0-9]\+\.[0-9]\+/version: ${{ steps.version.outputs.version }}/g" charts/flux-externalsource-controller/README.md || true
 
     - name: Commit documentation updates
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add README.md charts/flux-external-controller/README.md || true
+        git add README.md charts/flux-externalsource-controller/README.md || true
         git diff --staged --quiet || git commit -m "docs: update version references to ${{ steps.version.outputs.version }}"
         git push || true

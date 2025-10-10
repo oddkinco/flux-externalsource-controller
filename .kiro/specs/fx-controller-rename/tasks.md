@@ -7,19 +7,19 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
 - [x] 2. Update directory structure and file names
-  - [x] 2.1 Rename Helm chart directory from `charts/fx-controller/` to `charts/flux-external-controller/`
+  - [x] 2.1 Rename Helm chart directory from `charts/fx-controller/` to `charts/flux-externalsource-controller/`
     - Move entire directory structure to new name
     - _Requirements: 2.1_
 
 - [x] 3. Update Helm chart configuration files
   - [x] 3.1 Update Chart.yaml with new naming convention
-    - Change chart name from "fx-controller" to "flux-external-controller"
+    - Change chart name from "fx-controller" to "flux-externalsource-controller"
     - Update home and sources URLs to use new repository path
     - Update maintainer name reference
     - _Requirements: 2.1, 2.2, 4.1, 4.2_
   
   - [x] 3.2 Update Helm chart README.md
-    - Replace all "fx-controller" references with "flux-external-controller"
+    - Replace all "fx-controller" references with "flux-externalsource-controller"
     - Update GitHub repository URLs to new path
     - _Requirements: 6.1, 6.2, 6.3_
   
@@ -36,14 +36,14 @@
 
 - [x] 5. Update PROJECT file configuration
   - [x] 5.1 Update PROJECT file with new naming
-    - Change projectName from "fx-controller" to "flux-external-controller"
+    - Change projectName from "fx-controller" to "flux-externalsource-controller"
     - Change domain from "example.com" to "flux.oddkin.co"
     - Verify repo field matches new module path
     - _Requirements: 1.1, 4.1_
 
 - [x] 6. Update documentation files
   - [x] 6.1 Update main README.md
-    - Replace all "fx-controller" references with "flux-external-controller"
+    - Replace all "fx-controller" references with "flux-externalsource-controller"
     - Update GitHub repository URLs from "github.com/example/fx-controller" to "github.com/oddkin/flux-externalsource-controller"
     - Update API group references in examples from "source.example.com" to "source.flux.oddkin.co"
     - _Requirements: 4.1, 4.2, 5.4, 6.1, 6.2, 6.3_
@@ -102,7 +102,7 @@
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
   
   - [x] 12.2 Validate Helm chart
-    - Run `helm lint charts/flux-external-controller` to verify chart syntax
+    - Run `helm lint charts/flux-externalsource-controller` to verify chart syntax
     - Run `helm template` to verify template rendering
     - _Requirements: 2.1, 2.2, 2.3_
   
