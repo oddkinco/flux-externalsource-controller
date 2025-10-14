@@ -40,8 +40,8 @@ type PrometheusRecorder struct {
 	reconciliationDuration    *prometheus.HistogramVec
 	sourceRequestTotal        *prometheus.CounterVec
 	sourceRequestDuration     *prometheus.HistogramVec
-	transformationTotal       *prometheus.CounterVec
-	transformationDuration    prometheus.Histogram
+	hookExecutionTotal        *prometheus.CounterVec
+	hookExecutionDuration     *prometheus.HistogramVec
 	artifactOperationTotal    *prometheus.CounterVec
 	artifactOperationDuration *prometheus.HistogramVec
 	activeReconciliations     *prometheus.GaugeVec
@@ -80,19 +80,20 @@ func NewPrometheusRecorder() *PrometheusRecorder {
 			},
 			[]string{"source_type", "success"},
 		),
-		transformationTotal: prometheus.NewCounterVec(
+		hookExecutionTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "externalsource_transformation_total",
-				Help: "Total number of data transformations performed",
+				Name: "externalsource_hook_execution_total",
+				Help: "Total number of hook executions performed",
 			},
-			[]string{"success"},
+			[]string{"hook_name", "retry_policy", "success"},
 		),
-		transformationDuration: prometheus.NewHistogram(
+		hookExecutionDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "externalsource_transformation_duration_seconds",
-				Help:    "Duration of data transformation operations in seconds",
-				Buckets: []float64{0.001, 0.01, 0.1, 0.5, 1, 2.5, 5, 10},
+				Name:    "externalsource_hook_execution_duration_seconds",
+				Help:    "Duration of hook execution operations in seconds",
+				Buckets: []float64{0.001, 0.01, 0.1, 0.5, 1, 2.5, 5, 10, 30},
 			},
+			[]string{"hook_name", "retry_policy", "success"},
 		),
 		artifactOperationTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -124,8 +125,8 @@ func NewPrometheusRecorder() *PrometheusRecorder {
 		recorder.reconciliationDuration,
 		recorder.sourceRequestTotal,
 		recorder.sourceRequestDuration,
-		recorder.transformationTotal,
-		recorder.transformationDuration,
+		recorder.hookExecutionTotal,
+		recorder.hookExecutionDuration,
 		recorder.artifactOperationTotal,
 		recorder.artifactOperationDuration,
 		recorder.activeReconciliations,
@@ -156,15 +157,15 @@ func (r *PrometheusRecorder) RecordSourceRequest(sourceType string, success bool
 	r.sourceRequestDuration.WithLabelValues(sourceType, successLabel).Observe(duration.Seconds())
 }
 
-// RecordTransformation records a data transformation attempt
-func (r *PrometheusRecorder) RecordTransformation(success bool, duration time.Duration) {
+// RecordHookExecution records a hook execution attempt
+func (r *PrometheusRecorder) RecordHookExecution(hookName, retryPolicy string, success bool, duration time.Duration) {
 	successLabel := successFalse
 	if success {
 		successLabel = successTrue
 	}
 
-	r.transformationTotal.WithLabelValues(successLabel).Inc()
-	r.transformationDuration.Observe(duration.Seconds())
+	r.hookExecutionTotal.WithLabelValues(hookName, retryPolicy, successLabel).Inc()
+	r.hookExecutionDuration.WithLabelValues(hookName, retryPolicy, successLabel).Observe(duration.Seconds())
 }
 
 // RecordArtifactOperation records an artifact storage operation

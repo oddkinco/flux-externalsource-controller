@@ -41,8 +41,8 @@ type Config struct {
 	// Retry configuration
 	Retry RetryConfig `json:"retry"`
 
-	// Transformation configuration
-	Transform TransformConfig `json:"transform"`
+	// Hooks configuration
+	Hooks HooksConfig `json:"hooks"`
 
 	// Metrics configuration
 	Metrics MetricsConfig `json:"metrics"`
@@ -117,13 +117,16 @@ type RetryConfig struct {
 	JitterFactor float64 `json:"jitterFactor"`
 }
 
-// TransformConfig holds transformation configuration
-type TransformConfig struct {
-	// Timeout for CEL expression execution
-	Timeout time.Duration `json:"timeout"`
+// HooksConfig holds hooks execution configuration
+type HooksConfig struct {
+	// WhitelistPath is the path to the whitelist configuration file
+	WhitelistPath string `json:"whitelistPath"`
 
-	// Maximum memory limit for CEL expressions (in bytes)
-	MemoryLimit int64 `json:"memoryLimit"`
+	// SidecarEndpoint is the HTTP endpoint for the hook executor sidecar
+	SidecarEndpoint string `json:"sidecarEndpoint"`
+
+	// DefaultTimeout is the default timeout for hook execution
+	DefaultTimeout time.Duration `json:"defaultTimeout"`
 }
 
 // MetricsConfig holds metrics configuration
@@ -160,9 +163,10 @@ func DefaultConfig() *Config {
 			MaxDelay:     5 * time.Minute,
 			JitterFactor: 0.25,
 		},
-		Transform: TransformConfig{
-			Timeout:     30 * time.Second,
-			MemoryLimit: 64 * 1024 * 1024, // 64MB
+		Hooks: HooksConfig{
+			WhitelistPath:   "/etc/hooks/whitelist.yaml",
+			SidecarEndpoint: "http://localhost:8081",
+			DefaultTimeout:  30 * time.Second,
 		},
 		Metrics: MetricsConfig{
 			Enabled:  true,
@@ -176,7 +180,7 @@ func (c *Config) LoadFromEnvironment() {
 	c.loadStorageFromEnv()
 	c.loadHTTPFromEnv()
 	c.loadRetryFromEnv()
-	c.loadTransformFromEnv()
+	c.loadHooksFromEnv()
 	c.loadMetricsFromEnv()
 }
 
@@ -270,16 +274,17 @@ func (c *Config) loadRetryFromEnv() {
 	}
 }
 
-// loadTransformFromEnv loads transformation configuration from environment variables
-func (c *Config) loadTransformFromEnv() {
-	if timeoutStr := os.Getenv("TRANSFORM_TIMEOUT"); timeoutStr != "" {
-		if timeout, err := time.ParseDuration(timeoutStr); err == nil {
-			c.Transform.Timeout = timeout
-		}
+// loadHooksFromEnv loads hooks configuration from environment variables
+func (c *Config) loadHooksFromEnv() {
+	if whitelistPath := os.Getenv("HOOK_WHITELIST_PATH"); whitelistPath != "" {
+		c.Hooks.WhitelistPath = whitelistPath
 	}
-	if memoryLimitStr := os.Getenv("TRANSFORM_MEMORY_LIMIT"); memoryLimitStr != "" {
-		if memoryLimit, err := strconv.ParseInt(memoryLimitStr, 10, 64); err == nil {
-			c.Transform.MemoryLimit = memoryLimit
+	if sidecarEndpoint := os.Getenv("HOOK_EXECUTOR_ENDPOINT"); sidecarEndpoint != "" {
+		c.Hooks.SidecarEndpoint = sidecarEndpoint
+	}
+	if timeoutStr := os.Getenv("HOOK_DEFAULT_TIMEOUT"); timeoutStr != "" {
+		if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+			c.Hooks.DefaultTimeout = timeout
 		}
 	}
 }
@@ -354,12 +359,15 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("retry jitter factor must be between 0 and 1")
 	}
 
-	// Validate transform configuration
-	if c.Transform.Timeout <= 0 {
-		return fmt.Errorf("transform timeout must be positive")
+	// Validate hooks configuration
+	if c.Hooks.WhitelistPath == "" {
+		return fmt.Errorf("hooks whitelist path must be specified")
 	}
-	if c.Transform.MemoryLimit <= 0 {
-		return fmt.Errorf("transform memory limit must be positive")
+	if c.Hooks.SidecarEndpoint == "" {
+		return fmt.Errorf("hooks sidecar endpoint must be specified")
+	}
+	if c.Hooks.DefaultTimeout <= 0 {
+		return fmt.Errorf("hooks default timeout must be positive")
 	}
 
 	// Validate metrics configuration

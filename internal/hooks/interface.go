@@ -20,14 +20,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-package transformer
+// Package hooks provides hook execution capabilities for ExternalSource resources.
+package hooks
 
 import (
 	"context"
+
+	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
 )
 
-// Transformer defines the interface for data transformation
-type Transformer interface {
-	// Transform applies a transformation to the input data using the given expression
-	Transform(ctx context.Context, input []byte, expression string) ([]byte, error)
+// HookExecutor defines the interface for executing hooks
+type HookExecutor interface {
+	// Execute runs a hook with the given input data and returns the output
+	Execute(ctx context.Context, input []byte, hook sourcev1alpha1.HookSpec) ([]byte, error)
+}
+
+// WhitelistManager defines the interface for managing command whitelists
+type WhitelistManager interface {
+	// IsAllowed checks if a command with given arguments is allowed
+	IsAllowed(command string, args []string) bool
+
+	// Reload reloads the whitelist from the configured source
+	Reload() error
 }

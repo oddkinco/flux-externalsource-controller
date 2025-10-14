@@ -37,8 +37,8 @@ type MetricsRecorder interface {
 	// RecordSourceRequest records a request to an external source
 	RecordSourceRequest(sourceType string, success bool, duration time.Duration)
 
-	// RecordTransformation records a data transformation attempt
-	RecordTransformation(success bool, duration time.Duration)
+	// RecordHookExecution records a hook execution attempt
+	RecordHookExecution(hookName, retryPolicy string, success bool, duration time.Duration)
 
 	// RecordArtifactOperation records an artifact storage operation
 	RecordArtifactOperation(operation string, success bool, duration time.Duration)

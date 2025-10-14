@@ -44,8 +44,8 @@ func (r *NoOpRecorder) RecordSourceRequest(_ string, _ bool, _ time.Duration) {
 	// No-op
 }
 
-// RecordTransformation does nothing
-func (r *NoOpRecorder) RecordTransformation(_ bool, _ time.Duration) {
+// RecordHookExecution does nothing
+func (r *NoOpRecorder) RecordHookExecution(_, _ string, _ bool, _ time.Duration) {
 	// No-op
 }
 

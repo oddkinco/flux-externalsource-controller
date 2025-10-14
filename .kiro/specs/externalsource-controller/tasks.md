@@ -38,16 +38,27 @@
     - Mock HTTP responses for various scenarios (success, failure, ETag)
     - _Requirements: 2.1, 2.2, 1.3_
 
-- [x] 4. Implement data transformation system
-  - [x] 4.1 Create transformer interface and CEL implementation
-    - Define Transformer interface for pluggable transformation engines
-    - Implement CEL transformer with sandboxed execution and timeout handling
-    - _Requirements: 4.1, 4.2, 4.3_
+- [x] 4. Implement hook execution system
+  - [x] 4.1 Create hook executor and whitelist manager interfaces
+    - Define HookExecutor interface for command execution
+    - Define WhitelistManager interface for command validation
+    - Implement SidecarExecutor for HTTP-based communication with hook-executor sidecar
+    - Implement FileWhitelistManager for YAML-based whitelist loading
+    - _Requirements: 4.1, 4.2, 4.3, 11.1, 11.2, 11.5_
   
-  - [x] 4.2 Write unit tests for transformation logic
-    - Test CEL expression execution with valid and invalid expressions
-    - Verify timeout and error handling for malicious expressions
-    - _Requirements: 4.1, 4.2, 4.3, 4.4_
+  - [x] 4.2 Create hook-executor sidecar binary
+    - Implement HTTP server for command execution
+    - Support stdin/stdout byte streaming with base64 encoding
+    - Add timeout enforcement and environment variable support
+    - Create multi-arch Docker image with common utilities (jq, yq, curl)
+    - Set up GitHub Actions workflow for automated builds
+    - _Requirements: 4.8, 11.5_
+  
+  - [x] 4.3 Write unit tests for hook execution logic
+    - Test hook executor with various commands and retry policies
+    - Test whitelist validation with allowed and forbidden commands
+    - Verify timeout and error handling for hook failures
+    - _Requirements: 4.1, 4.4, 4.5, 4.6, 4.7_
 
 - [x] 5. Implement artifact management system
   - [x] 5.1 Create artifact manager with packaging logic
@@ -81,10 +92,12 @@
     - Add conditional fetching logic with ETag optimization for HTTP sources
     - _Requirements: 3.1, 3.2, 3.3, 2.1_
   
-  - [x] 6.2 Add transformation and artifact creation workflow
-    - Integrate transformer and artifact manager into reconciliation flow
+  - [x] 6.2 Add hook execution and artifact creation workflow
+    - Integrate hook executor for pre-request and post-request hooks
+    - Implement retry policy logic (ignore, retry, fail) with aggregate maxRetries limit
+    - Integrate artifact manager into reconciliation flow
     - Implement proper error handling and status condition updates
-    - _Requirements: 4.1, 5.1, 7.1, 8.5_
+    - _Requirements: 4.1, 4.4, 4.5, 4.6, 4.7, 5.1, 7.1, 8.5_
   
   - [x] 6.3 Implement ExternalArtifact child resource management
     - Create and update ExternalArtifact resources with proper ownership
@@ -100,10 +113,11 @@
   - [x] 7.1 Add Prometheus metrics collection
     - Implement metrics for reconciliation count, duration, and success/failure rates
     - Add source-type-specific metrics for request latency and errors
+    - Add hook execution metrics (total executions, duration, success/failure by hook name)
     - _Requirements: 7.2, 7.3, 7.4_
   
   - [x] 7.2 Enhance status condition management
-    - Implement comprehensive status conditions (Ready, Fetching, Transforming, Storing, Stalled)
+    - Implement comprehensive status conditions (Ready, Fetching, ExecutingHooks, Storing, Stalled)
     - Add detailed error messages and observedGeneration tracking
     - _Requirements: 7.1, 7.5_
   
@@ -131,13 +145,16 @@
 - [x] 9. Add configuration and deployment setup
   - [x] 9.1 Create controller configuration system
     - Implement configuration for storage backends, timeouts, and retry limits
+    - Add hook executor configuration (whitelist path, sidecar endpoint, default timeout)
     - Add environment variable and ConfigMap support for configuration
-    - _Requirements: 9.1, 9.4_
+    - _Requirements: 9.1, 9.4, 11.1_
   
   - [x] 9.2 Create Kubernetes deployment manifests
     - Generate RBAC, Deployment, and Service manifests
+    - Add hook-executor sidecar container to deployment
+    - Create whitelist ConfigMap for allowed commands
     - Configure proper resource limits and security contexts
-    - _Requirements: 10.1, 10.4_
+    - _Requirements: 10.1, 10.4, 11.5_
   
   - [x] 9.3 Write end-to-end tests
     - Test complete workflow with real Kubernetes cluster using envtest
@@ -147,22 +164,23 @@
 - [x] 10. Documentation and examples
   - [x] 10.1 Create user documentation and examples
     - Write comprehensive README with installation and usage instructions
-    - Create example ExternalSource manifests for common use cases
-    - _Requirements: 1.1, 2.1_
+    - Create example ExternalSource manifests with hook usage
+    - Add migration guide from CEL to hooks system
+    - _Requirements: 1.1, 2.1, 4.1_
   
   - [x] 10.2 Add developer documentation for extensibility
     - Document how to add new source generator types
     - Provide examples of implementing custom generators
-    - _Requirements: 2.1, 2.2, 2.5_
+    - Document hook executor architecture and whitelist format
+    - _Requirements: 2.1, 2.2, 2.5, 11.1, 11.2_
   
-  - [x] 10.3 Add Docker Compose-based integration testing environment
-    - Use docker k0s image to run a minimal kubernetes cluster
-    - Bootstrap Flux on the cluster with "flux install"
-    - Install a simple webserver on the cluster that can respond to HTTP requests
-    - Deploy flux-externalsource-controller to the cluster in the flux-system namespace
-    - Install sample ExternalSource resources
-    - Verify that ExternalArtifact resources are created, and can be retrieved
+  - [x] 10.3 Add end-to-end testing using Kind
+    - Implement Go-based e2e tests using Ginkgo/Gomega
+    - Test complete workflow with Kind cluster and actual Flux components
+    - Verify hook execution with real sidecar container
+    - Validate metrics and status conditions
 
   - [x] 10.4 Create github workflows for deployment artifacts for tagged releases
     - Create a helm chart for deploying flux-externalsource-controller
     - Add github workflows that build tagged docker and helm releases and push to ghcr.io package repositories
+    - Add github workflow for building and pushing hook-executor multi-arch images

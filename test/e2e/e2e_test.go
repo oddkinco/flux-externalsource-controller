@@ -389,13 +389,13 @@ spec:
 			_, _ = utils.Run(cmd)
 		})
 
-		It("should handle ExternalSource with transformation", func() {
+		It("should handle ExternalSource with hooks", func() {
 			By("creating a test HTTP server with JSON data")
 			testServerManifest := `
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: transform-test-data
+  name: hooks-test-data
   namespace: ` + namespace + `
 data:
   data.json: |
@@ -410,10 +410,10 @@ data:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: transform-test-server
+  name: hooks-test-server
   namespace: ` + namespace + `
   labels:
-    app: transform-test-server
+    app: hooks-test-server
 spec:
   containers:
   - name: server
@@ -426,16 +426,16 @@ spec:
   volumes:
   - name: config
     configMap:
-      name: transform-test-data
+      name: hooks-test-data
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: transform-test-server
+  name: hooks-test-server
   namespace: ` + namespace + `
 spec:
   selector:
-    app: transform-test-server
+    app: hooks-test-server
   ports:
   - port: 80
     targetPort: 80
@@ -443,67 +443,73 @@ spec:
 			cmd := exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = strings.NewReader(testServerManifest)
 			_, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create transform test HTTP server")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create hooks test HTTP server")
 
-			By("waiting for the transform test HTTP server to be ready")
+			By("waiting for the hooks test HTTP server to be ready")
 			verifyServerReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "pod", "transform-test-server", "-n", namespace, "-o", "jsonpath={.status.phase}")
+				cmd := exec.Command("kubectl", "get", "pod", "hooks-test-server", "-n", namespace, "-o", "jsonpath={.status.phase}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("Running"))
 			}
 			Eventually(verifyServerReady).Should(Succeed())
 
-			By("creating an ExternalSource with CEL transformation")
+			By("creating an ExternalSource with post-request hooks")
 			externalSourceManifest := `
 apiVersion: source.flux.oddkin.co/v1alpha1
 kind: ExternalSource
 metadata:
-  name: test-transform-source
+  name: test-hooks-source
   namespace: ` + namespace + `
 spec:
   interval: 30s
+  maxRetries: 3
   generator:
     type: http
     http:
-      url: http://transform-test-server.` + namespace + `.svc.cluster.local/data.json
+      url: http://hooks-test-server.` + namespace + `.svc.cluster.local/data.json
       method: GET
-  transform:
-    type: cel
-    expression: |
-      {
-        "active_users": input.users.filter(u, u.active).map(u, {"name": u.name, "age": u.age}),
-        "total_count": size(input.users),
-        "active_count": size(input.users.filter(u, u.active))
-      }
+  hooks:
+    postRequest:
+      - name: filter-active-users
+        command: jq
+        args:
+          - |
+            {
+              "active_users": (.users | map(select(.active)) | map({name: .name, age: .age})),
+              "total_count": (.users | length),
+              "active_count": (.users | map(select(.active)) | length)
+            }
+        timeout: "10s"
+        retryPolicy: fail
   destinationPath: transformed.json
 `
 			cmd = exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = strings.NewReader(externalSourceManifest)
 			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create ExternalSource with transformation")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create ExternalSource with hooks")
 
-			By("waiting for ExternalSource with transformation to be ready")
-			verifyTransformSourceReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "externalsource", "test-transform-source", "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
+			By("waiting for ExternalSource with hooks to be ready")
+			verifyHooksSourceReady := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "externalsource", "test-hooks-source", "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("True"))
 			}
-			Eventually(verifyTransformSourceReady, 2*time.Minute).Should(Succeed())
+			Eventually(verifyHooksSourceReady, 2*time.Minute).Should(Succeed())
 
-			By("verifying that transformation metrics are recorded")
-			verifyTransformationMetrics := func(g Gomega) {
+			By("verifying that hook execution metrics are recorded")
+			verifyHookMetrics := func(g Gomega) {
 				metricsOutput, err := getMetricsOutput()
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(metricsOutput).To(ContainSubstring("externalsource_transformations_total"))
+				g.Expect(metricsOutput).To(ContainSubstring("externalsource_hook_execution_total"))
 			}
-			Eventually(verifyTransformationMetrics).Should(Succeed())
+			Eventually(verifyHookMetrics).Should(Succeed())
 
-			By("cleaning up transform test resources")
-			cmd = exec.Command("kubectl", "delete", "externalsource", "test-transform-source", "-n", namespace)
+			By("cleaning up hooks test resources")
+			cmd = exec.Command("kubectl", "delete", "externalsource", "test-hooks-source", "-n", namespace)
 			_, _ = utils.Run(cmd)
-			cmd = exec.Command("kubectl", "delete", "pod,service,configmap", "-l", "app=transform-test-server", "-n", namespace)
+			cmd = exec.Command("kubectl", "delete", "pod,service,configmap", "-l", "app=hooks-test-server", "-n", namespace)
 			_, _ = utils.Run(cmd)
 		})
 

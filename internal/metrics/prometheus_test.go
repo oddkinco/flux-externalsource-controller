@@ -166,48 +166,55 @@ func TestPrometheusRecorder_RecordSourceRequest(t *testing.T) {
 	}
 }
 
-func TestPrometheusRecorder_RecordTransformation(t *testing.T) {
+func TestPrometheusRecorder_RecordHookExecution(t *testing.T) {
 	registry := prometheus.NewRegistry()
 
 	recorder := &PrometheusRecorder{
-		transformationTotal: prometheus.NewCounterVec(
+		hookExecutionTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "externalsource_transformation_total",
-				Help: "Total number of data transformations performed",
+				Name: "externalsource_hook_execution_total",
+				Help: "Total number of hook executions performed",
 			},
-			[]string{"success"},
+			[]string{"hook_name", "retry_policy", "success"},
 		),
-		transformationDuration: prometheus.NewHistogram(
+		hookExecutionDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "externalsource_transformation_duration_seconds",
-				Help:    "Duration of data transformation operations in seconds",
-				Buckets: []float64{0.001, 0.01, 0.1, 0.5, 1, 2.5, 5, 10},
+				Name:    "externalsource_hook_execution_duration_seconds",
+				Help:    "Duration of hook execution operations in seconds",
+				Buckets: []float64{0.001, 0.01, 0.1, 0.5, 1, 2.5, 5, 10, 30},
 			},
+			[]string{"hook_name", "retry_policy", "success"},
 		),
 	}
 
-	registry.MustRegister(recorder.transformationTotal, recorder.transformationDuration)
+	registry.MustRegister(recorder.hookExecutionTotal, recorder.hookExecutionDuration)
 
 	tests := []struct {
-		name     string
-		success  bool
-		duration time.Duration
+		name        string
+		hookName    string
+		retryPolicy string
+		success     bool
+		duration    time.Duration
 	}{
 		{
-			name:     "successful transformation",
-			success:  true,
-			duration: 10 * time.Millisecond,
+			name:        "successful hook execution",
+			hookName:    "transform-data",
+			retryPolicy: "retry",
+			success:     true,
+			duration:    10 * time.Millisecond,
 		},
 		{
-			name:     "failed transformation",
-			success:  false,
-			duration: 5 * time.Millisecond,
+			name:        "failed hook execution",
+			hookName:    "validate-data",
+			retryPolicy: "fail",
+			success:     false,
+			duration:    5 * time.Millisecond,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recorder.RecordTransformation(tt.success, tt.duration)
+			recorder.RecordHookExecution(tt.hookName, tt.retryPolicy, tt.success, tt.duration)
 
 			successLabel := successFalse
 			if tt.success {
@@ -215,9 +222,9 @@ func TestPrometheusRecorder_RecordTransformation(t *testing.T) {
 			}
 
 			// Check counter metric
-			counter := recorder.transformationTotal.WithLabelValues(successLabel)
+			counter := recorder.hookExecutionTotal.WithLabelValues(tt.hookName, tt.retryPolicy, successLabel)
 			if got := testutil.ToFloat64(counter); got != 1 {
-				t.Errorf("RecordTransformation() counter = %v, want 1", got)
+				t.Errorf("RecordHookExecution() counter = %v, want 1", got)
 			}
 
 			// Histogram metrics are recorded successfully if no panic occurred
@@ -364,11 +371,11 @@ func TestNewPrometheusRecorder(t *testing.T) {
 	if recorder.sourceRequestDuration == nil {
 		t.Error("sourceRequestDuration metric not initialized")
 	}
-	if recorder.transformationTotal == nil {
-		t.Error("transformationTotal metric not initialized")
+	if recorder.hookExecutionTotal == nil {
+		t.Error("hookExecutionTotal metric not initialized")
 	}
-	if recorder.transformationDuration == nil {
-		t.Error("transformationDuration metric not initialized")
+	if recorder.hookExecutionDuration == nil {
+		t.Error("hookExecutionDuration metric not initialized")
 	}
 	if recorder.artifactOperationTotal == nil {
 		t.Error("artifactOperationTotal metric not initialized")
@@ -383,7 +390,7 @@ func TestNewPrometheusRecorder(t *testing.T) {
 	// Test that we can record metrics without panicking
 	recorder.RecordReconciliation("default", "test", "http", true, 100*time.Millisecond)
 	recorder.RecordSourceRequest("http", true, 200*time.Millisecond)
-	recorder.RecordTransformation(true, 10*time.Millisecond)
+	recorder.RecordHookExecution("test-hook", "retry", true, 10*time.Millisecond)
 	recorder.RecordArtifactOperation("package", true, 50*time.Millisecond)
 	recorder.IncActiveReconciliations("default", "test")
 	recorder.DecActiveReconciliations("default", "test")

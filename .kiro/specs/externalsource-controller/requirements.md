@@ -46,15 +46,19 @@ The ExternalSource Controller is a Kubernetes operator built using the Kubebuild
 
 ### Requirement 4
 
-**User Story:** As a platform engineer, I want to transform raw response data before packaging, so that I can adapt external data formats to match my application requirements.
+**User Story:** As a platform engineer, I want to execute command hooks before and after fetching data, so that I can prepare requests, transform responses, and validate data using whitelisted external tools.
 
 #### Acceptance Criteria
 
-1. WHEN a transform specification is provided THEN the system SHALL apply the transformation to the raw response data from any source type
-2. WHEN using CEL transformation type THEN the system SHALL execute CEL expressions in a sandboxed environment
-3. WHEN transformation execution exceeds timeout limits THEN the system SHALL terminate the process and report an error
-4. WHEN transformation fails THEN the system SHALL update the resource status with error conditions and retry with exponential backoff
-5. IF no transformation is specified THEN the system SHALL use the raw response data as-is
+1. WHEN pre-request hooks are specified THEN the system SHALL execute them in order before the HTTP request
+2. WHEN post-request hooks are specified THEN the system SHALL execute them in order after receiving the response
+3. WHEN a hook specifies a command THEN the system SHALL validate it against a whitelist before execution
+4. WHEN a hook execution exceeds its timeout THEN the system SHALL terminate the process and apply the hook's retry policy
+5. WHEN a hook's retry policy is "ignore" THEN the system SHALL log the failure and continue
+6. WHEN a hook's retry policy is "retry" THEN the system SHALL retry the hook up to the maxRetries limit
+7. WHEN a hook's retry policy is "fail" THEN the system SHALL mark the reconciliation as failed and update status conditions
+8. WHEN hooks use environment variables THEN the system SHALL pass them to the command execution environment
+9. IF no hooks are specified THEN the system SHALL use the raw response data as-is
 
 ### Requirement 5
 
@@ -127,3 +131,15 @@ The ExternalSource Controller is a Kubernetes operator built using the Kubebuild
 3. WHEN reconciliation queues build up THEN the system SHALL process them efficiently using the controller-runtime framework
 4. WHEN memory usage grows THEN the system SHALL implement appropriate limits and garbage collection
 5. WHEN CPU usage is high THEN the system SHALL maintain responsiveness for critical operations
+
+### Requirement 11
+
+**User Story:** As a security engineer, I want hook command execution to be controlled by a whitelist, so that only approved commands can be executed in my cluster.
+
+#### Acceptance Criteria
+
+1. WHEN the controller starts THEN the system SHALL load the command whitelist from a mounted configuration file
+2. WHEN a hook specifies a command THEN the system SHALL validate it against the whitelist before execution
+3. WHEN a command is not in the whitelist THEN the system SHALL reject the hook execution and report an error
+4. WHEN the whitelist configuration changes THEN the system SHALL support reloading without controller restart
+5. WHEN hook execution occurs THEN the system SHALL run commands in an isolated sidecar container

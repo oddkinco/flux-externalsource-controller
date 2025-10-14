@@ -40,7 +40,7 @@ import (
 	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
 	"github.com/oddkinco/flux-externalsource-controller/internal/generator"
-	"github.com/oddkinco/flux-externalsource-controller/internal/transformer"
+	"github.com/oddkinco/flux-externalsource-controller/internal/hooks"
 )
 
 // createTestConfig creates a default configuration for testing
@@ -315,7 +315,7 @@ var _ = Describe("ExternalSource Controller", func() {
 
 			By("reconciling the created resource")
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			// Register mock HTTP generator
@@ -328,7 +328,7 @@ var _ = Describe("ExternalSource Controller", func() {
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 
@@ -384,7 +384,7 @@ var _ = Describe("ExternalSource Controller", func() {
 
 			By("reconciling the suspended resource")
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			controllerReconciler := &ExternalSourceReconciler{
@@ -392,7 +392,7 @@ var _ = Describe("ExternalSource Controller", func() {
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 
@@ -502,19 +502,19 @@ func (m *MockGeneratorFactory) SupportedTypes() []string {
 	return supportedTypes
 }
 
-// MockTransformer implements transformer.Transformer for testing
-type MockTransformer struct {
-	TransformFunc func(ctx context.Context, input []byte, expression string) ([]byte, error)
+// MockHookExecutor implements hooks.HookExecutor for testing
+type MockHookExecutor struct {
+	ExecuteFunc func(ctx context.Context, input []byte, hook sourcev1alpha1.HookSpec) ([]byte, error)
 }
 
-// Ensure MockTransformer implements transformer.Transformer
-var _ transformer.Transformer = (*MockTransformer)(nil)
+// Ensure MockHookExecutor implements hooks.HookExecutor
+var _ hooks.HookExecutor = (*MockHookExecutor)(nil)
 
-func (m *MockTransformer) Transform(ctx context.Context, input []byte, expression string) ([]byte, error) {
-	if m.TransformFunc != nil {
-		return m.TransformFunc(ctx, input, expression)
+func (m *MockHookExecutor) Execute(ctx context.Context, input []byte, hook sourcev1alpha1.HookSpec) ([]byte, error) {
+	if m.ExecuteFunc != nil {
+		return m.ExecuteFunc(ctx, input, hook)
 	}
-	// Default transformation just returns the input
+	// Default behavior just returns the input
 	return input, nil
 }
 
@@ -557,7 +557,7 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 		var (
 			ctx                 context.Context
 			mockFactory         *MockGeneratorFactory
-			mockTransformer     *MockTransformer
+			mockHookExecutor    *MockHookExecutor
 			mockArtifactManager *MockArtifactManager
 			reconciler          *ExternalSourceReconciler
 		)
@@ -565,7 +565,7 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFactory = NewMockGeneratorFactory()
-			mockTransformer = &MockTransformer{}
+			mockHookExecutor = &MockHookExecutor{}
 			mockArtifactManager = &MockArtifactManager{}
 
 			reconciler = &ExternalSourceReconciler{
@@ -573,7 +573,7 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 
@@ -780,7 +780,7 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 			}
 
 			By("setting up mock transformer to fail")
-			mockTransformer.TransformFunc = func(ctx context.Context, input []byte, expression string) ([]byte, error) {
+			mockHookExecutor.TransformFunc = func(ctx context.Context, input []byte, expression string) ([]byte, error) {
 				return nil, fmt.Errorf("invalid CEL expression")
 			}
 
@@ -1063,11 +1063,11 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 
 			// Set up reconciler with required dependencies
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			reconciler.GeneratorFactory = mockFactory
-			reconciler.Transformer = mockTransformer
+			reconciler.Transformer = mockHookExecutor
 			reconciler.ArtifactManager = mockArtifactManager
 
 			// Register mock HTTP generator
@@ -1129,11 +1129,11 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 
 			// Set up reconciler with failing generator
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			reconciler.GeneratorFactory = mockFactory
-			reconciler.Transformer = mockTransformer
+			reconciler.Transformer = mockHookExecutor
 			reconciler.ArtifactManager = mockArtifactManager
 
 			// Register mock HTTP generator that fails
@@ -1190,11 +1190,11 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 
 			// Set up reconciler with required dependencies
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			reconciler.GeneratorFactory = mockFactory
-			reconciler.Transformer = mockTransformer
+			reconciler.Transformer = mockHookExecutor
 			reconciler.ArtifactManager = mockArtifactManager
 
 			// Register mock HTTP generator
@@ -1499,7 +1499,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		var (
 			ctx                 context.Context
 			mockFactory         *MockGeneratorFactory
-			mockTransformer     *MockTransformer
+			mockHookExecutor    *MockHookExecutor
 			mockArtifactManager *MockArtifactManager
 			reconciler          *ExternalSourceReconciler
 		)
@@ -1507,7 +1507,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFactory = NewMockGeneratorFactory()
-			mockTransformer = &MockTransformer{}
+			mockHookExecutor = &MockHookExecutor{}
 			mockArtifactManager = &MockArtifactManager{}
 
 			reconciler = &ExternalSourceReconciler{
@@ -1515,7 +1515,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 
@@ -1717,7 +1717,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		var (
 			ctx                 context.Context
 			mockFactory         *MockGeneratorFactory
-			mockTransformer     *MockTransformer
+			mockHookExecutor    *MockHookExecutor
 			mockArtifactManager *MockArtifactManager
 			reconciler          *ExternalSourceReconciler
 		)
@@ -1725,7 +1725,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFactory = NewMockGeneratorFactory()
-			mockTransformer = &MockTransformer{}
+			mockHookExecutor = &MockHookExecutor{}
 			mockArtifactManager = &MockArtifactManager{}
 
 			reconciler = &ExternalSourceReconciler{
@@ -1733,7 +1733,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 		})

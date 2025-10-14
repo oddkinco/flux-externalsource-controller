@@ -36,7 +36,8 @@ The controller introduces the ExternalSource CRD, which will be the primary inte
 | interval | metav1.Duration | Yes | The frequency at which to check for updates. Minimum value 1m. |
 | suspend | bool | No | If true, suspends reconciliations for this source. |
 | destinationPath | string | No | Relative path within the artifact bundle to place the data file (e.g., config/values.yaml). |
-| transform | object | No | A definition for transforming the raw HTTP response. See transform spec below. |
+| maxRetries | int | No | Maximum number of retry attempts across all hooks and requests (default: 3). |
+| hooks | object | No | Optional pre-request and post-request command hooks. See hooks spec below. |
 | generator | object | Yes | Defines the method for acquiring the source data. Initially, only http is supported. |
 
 **generator.http Spec**
@@ -49,12 +50,23 @@ The controller introduces the ExternalSource CRD, which will be the primary inte
 | caBundleSecretRef | v1.LocalObjectReference | No | Reference to a Secret key containing a PEM-encoded CA bundle for TLS verification. |
 | insecureSkipVerify | bool | No | **(Not Recommended)** Allows skipping TLS certificate verification. Ignored if caBundleSecretRef is set. |
 
-**transform Spec**
+**hooks Spec**
 
 | Field | Type | Required | Description |
 | :---- | :---- | :---- | :---- |
-| type | string | Yes | The transformation language to use. Initial support for cel. |
-| expression | string | Yes | The CEL expression to apply to the raw response body. The result becomes the artifact content. |
+| preRequest | \[\]HookSpec | No | Commands to execute before the HTTP request. Can modify request parameters. |
+| postRequest | \[\]HookSpec | No | Commands to execute after the HTTP request. Process and validate response data. |
+
+**HookSpec**
+
+| Field | Type | Required | Description |
+| :---- | :---- | :---- | :---- |
+| name | string | Yes | Unique identifier for this hook. |
+| command | string | Yes | Executable command (must be in the whitelist). |
+| args | \[\]string | No | Arguments to pass to the command. |
+| timeout | string | No | Maximum duration for hook execution (default: 30s). |
+| retryPolicy | string | No | How to handle failures: ignore, retry, or fail (default: fail). |
+| env | \[\]EnvVar | No | Environment variables for the hook. |
 
 **status Subresource**
 
@@ -74,24 +86,32 @@ The controller's reconciliation loop will execute the following stateful, asynch
    * Perform an HTTP HEAD request to the target url.  
    * Compare the ETag header from the response with the status.lastHandledETag.  
    * If the ETags match, the remote content has not changed. The controller will update the Ready condition and requeue the resource for its next check at spec.interval, skipping the rest of the steps.  
-3. **Fetch Data:**  
+3. **Execute Pre-Request Hooks:**  
+   * If spec.hooks.preRequest is defined, execute hooks in order.  
+   * Each hook can modify request parameters (URL, headers, method, body).  
+   * Apply retry policies (ignore, retry, fail) per hook.  
+   * Track retries against the aggregate spec.maxRetries limit.  
+4. **Fetch Data:**  
    * If credentials are required, fetch the referenced headersSecretRef.  
-   * Execute the full HTTP GET request, respecting TLS settings (caBundleSecretRef or insecureSkipVerify).  
+   * Execute the HTTP request with potentially modified parameters from pre-request hooks.  
+   * Respect TLS settings (caBundleSecretRef or insecureSkipVerify).  
    * On failure, update the status conditions with an error, and requeue the request with exponential backoff.  
-4. **Transform Data (Sandboxed):**  
-   * If spec.transform is defined, execute the transformation logic.  
-   * The execution will be sandboxed with strict timeouts and memory limits to prevent malicious or poorly written expressions from impacting the controller.  
-5. **Package Artifact:**  
-   * Create a file with the final (transformed or raw) data at the specified destinationPath.  
+5. **Execute Post-Request Hooks:**  
+   * If spec.hooks.postRequest is defined, execute hooks in order.  
+   * Each hook processes the response data through stdin/stdout piping.  
+   * Apply retry policies (ignore, retry, fail) per hook.  
+   * Track retries against the aggregate spec.maxRetries limit.  
+6. **Package Artifact:**  
+   * Create a file with the final (processed or raw) data at the specified destinationPath.  
    * Package the file into a .tar.gz archive.  
    * Calculate the SHA256 digest of the archive to serve as the new content-based revision (e.g., sha256:\<digest\>).  
-6. **Upload & Manage Artifacts:**  
+7. **Upload & Manage Artifacts:**  
    * Upload the new archive to the artifact storage backend (e.g., MinIO/S3).  
    * **Garbage Collection:** List all artifacts associated with this ExternalSource and delete any that do not match the newly uploaded revision, ensuring only the latest artifact is retained.  
-7. **Sync Child ExternalArtifact:**  
+8. **Sync Child ExternalArtifact:**  
    * Create or update the child ExternalArtifact resource owned by the ExternalSource.  
    * Populate its spec with the URL and revision of the new artifact.  
-8. **Update Status:**  
+9. **Update Status:**  
    * Update the ExternalSource.status with the new artifact details, the lastHandledETag, and a Ready condition set to True.
 
 ### **IV. Observability & Monitoring**
@@ -101,6 +121,8 @@ To provide operational insight, the controller will expose a /metrics endpoint w
 * externalsource\_reconciliation\_total{kind, name, namespace, status}: A counter for total reconciliations (success/failure).  
 * externalsource\_reconciliation\_duration\_seconds{kind, name, namespace}: A histogram of reconciliation latency.  
 * externalsource\_api\_request\_latency\_seconds{host}: A histogram of latency for external HTTP API calls.  
+* externalsource\_hook\_execution\_total{hook\_name, retry\_policy, status}: A counter for hook executions (success/failure).  
+* externalsource\_hook\_execution\_duration\_seconds{hook\_name}: A histogram of hook execution latency.  
 * gotk\_reconcile\_condition: The standard Flux condition metric, indicating the health of each ExternalSource resource.
 
 ### **V. Requirements & Dependencies**
