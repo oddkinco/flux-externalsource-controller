@@ -44,10 +44,10 @@ import (
 const namespace = "flux-externalsource-controller-system"
 
 // serviceAccountName created for the project
-const serviceAccountName = "flux-externalsource-controller-controller-manager"
+const serviceAccountName = "externalsource-controller-manager"
 
 // metricsServiceName is the name of the metrics service of the project
-const metricsServiceName = "flux-externalsource-controller-controller-manager-metrics-service"
+const metricsServiceName = "externalsource-controller-manager-metrics-service"
 
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
 const metricsRoleBindingName = "flux-externalsource-controller-metrics-binding"
