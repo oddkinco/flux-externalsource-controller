@@ -100,14 +100,23 @@ build_controller_image() {
     log "Building controller image: $CONTROLLER_IMAGE"
     
     # Build the controller binary
-    make build
+    if ! make build; then
+        error "Failed to build controller binary"
+        return 1
+    fi
     
     # Build Docker image
-    docker build -t "$CONTROLLER_IMAGE" .
+    if ! docker build -t "$CONTROLLER_IMAGE" .; then
+        error "Failed to build Docker image"
+        return 1
+    fi
     
     # Load image into kind cluster
     log "Loading image into kind cluster..."
-    "$KIND_BINARY" load docker-image "$CONTROLLER_IMAGE" --name "$KIND_CLUSTER"
+    if ! "$KIND_BINARY" load docker-image "$CONTROLLER_IMAGE" --name "$KIND_CLUSTER"; then
+        error "Failed to load image into Kind cluster"
+        return 1
+    fi
     
     log "Controller image built successfully"
 }
@@ -121,15 +130,27 @@ setup_test_environment() {
     
     # Install CRDs
     log "Installing CRDs..."
-    make install
+    if ! make install; then
+        error "Failed to install CRDs"
+        return 1
+    fi
     
     # Deploy controller with test image
     log "Deploying controller..."
-    make deploy IMG="$CONTROLLER_IMAGE"
+    if ! make deploy IMG="$CONTROLLER_IMAGE"; then
+        error "Failed to deploy controller"
+        error "This usually indicates an issue with the Kubernetes manifests"
+        return 1
+    fi
     
     # Wait for controller to be ready
     log "Waiting for controller to be ready..."
-    kubectl wait --for=condition=available --timeout=300s deployment/controller-manager -n "$NAMESPACE"
+    if ! kubectl wait --for=condition=available --timeout=300s deployment/controller-manager -n "$NAMESPACE" 2>/dev/null; then
+        error "Controller failed to become ready within timeout"
+        warn "Checking controller logs..."
+        kubectl logs -n "$NAMESPACE" deployment/controller-manager --tail=50 || true
+        return 1
+    fi
     
     log "Test environment setup complete"
 }
@@ -176,21 +197,63 @@ main() {
     TEST_RESULT=0
     
     # Trap to ensure cleanup on exit
-    trap 'cleanup_test_environment; cleanup_kind_cluster; exit $TEST_RESULT' EXIT
+    trap 'cleanup_on_exit' EXIT
     
     check_prerequisites
-    setup_kind_cluster
-    build_controller_image
-    setup_test_environment
+    
+    if ! setup_kind_cluster; then
+        error "=========================================="
+        error "CLUSTER SETUP FAILED"
+        error "=========================================="
+        TEST_RESULT=1
+        return
+    fi
+    
+    if ! build_controller_image; then
+        error "=========================================="
+        error "IMAGE BUILD FAILED"
+        error "=========================================="
+        TEST_RESULT=1
+        return
+    fi
+    
+    # Setup environment with error handling
+    if ! setup_test_environment; then
+        error "=========================================="
+        error "SETUP FAILED - E2E tests cannot continue"
+        error "=========================================="
+        TEST_RESULT=1
+        return
+    fi
     
     # Run tests and capture result
     if run_e2e_tests; then
+        log "=========================================="
         log "All E2E tests passed successfully!"
+        log "=========================================="
         TEST_RESULT=0
     else
-        error "E2E tests failed!"
+        error "=========================================="
+        error "E2E TESTS FAILED"
+        error "=========================================="
         TEST_RESULT=1
     fi
+}
+
+# Cleanup on exit handler
+cleanup_on_exit() {
+    EXIT_CODE=$?
+    
+    if [ $TEST_RESULT -ne 0 ] || [ $EXIT_CODE -ne 0 ]; then
+        error "=========================================="
+        error "E2E TEST RUN FAILED (exit code: $EXIT_CODE)"
+        error "=========================================="
+    fi
+    
+    cleanup_test_environment
+    cleanup_kind_cluster
+    
+    exit $TEST_RESULT
 }
 
 # Handle command line arguments
