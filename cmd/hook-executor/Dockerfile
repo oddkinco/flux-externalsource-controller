@@ -46,8 +46,8 @@ RUN addgroup -g 65532 -S hookexec && \
 
 USER hookexec:hookexec
 
-EXPOSE 8081
+EXPOSE 8082
 
 ENTRYPOINT ["/app/hook-executor"]
-CMD ["--port", "8081", "--whitelist", "/etc/hooks/whitelist.yaml"]
+CMD ["--port", "8082", "--whitelist", "/etc/hooks/whitelist.yaml"]
 

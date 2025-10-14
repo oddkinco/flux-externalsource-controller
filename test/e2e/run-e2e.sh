@@ -111,14 +111,26 @@ build_controller_image() {
         return 1
     fi
     
-    # Load image into kind cluster
-    log "Loading image into kind cluster..."
-    if ! "$KIND_BINARY" load docker-image "$CONTROLLER_IMAGE" --name "$KIND_CLUSTER"; then
-        error "Failed to load image into Kind cluster"
+    # Build hook-executor image
+    log "Building hook-executor image..."
+    if ! docker build -t ghcr.io/oddkinco/hook-executor:latest -f cmd/hook-executor/Dockerfile .; then
+        error "Failed to build hook-executor image"
         return 1
     fi
     
-    log "Controller image built successfully"
+    # Load images into kind cluster
+    log "Loading images into kind cluster..."
+    if ! "$KIND_BINARY" load docker-image "$CONTROLLER_IMAGE" --name "$KIND_CLUSTER"; then
+        error "Failed to load controller image into Kind cluster"
+        return 1
+    fi
+    
+    if ! "$KIND_BINARY" load docker-image ghcr.io/oddkinco/hook-executor:latest --name "$KIND_CLUSTER"; then
+        error "Failed to load hook-executor image into Kind cluster"
+        return 1
+    fi
+    
+    log "Controller and hook-executor images built successfully"
 }
 
 # Setup test environment
