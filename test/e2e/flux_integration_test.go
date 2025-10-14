@@ -26,7 +26,6 @@ SOFTWARE.
 package e2e
 
 import (
-	"fmt"
 	"os/exec"
 	"strings"
 	"time"
