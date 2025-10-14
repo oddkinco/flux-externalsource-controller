@@ -44,7 +44,7 @@ RUN addgroup -g 65532 -S hookexec && \
     adduser -u 65532 -S hookexec -G hookexec && \
     chown -R hookexec:hookexec /app /etc/hooks
 
-USER hookexec:hookexec
+USER 65532:65532
 
 EXPOSE 8082
 
