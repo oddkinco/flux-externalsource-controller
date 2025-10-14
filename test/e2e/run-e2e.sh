@@ -145,10 +145,10 @@ setup_test_environment() {
     
     # Wait for controller to be ready
     log "Waiting for controller to be ready..."
-    if ! kubectl wait --for=condition=available --timeout=300s deployment/controller-manager -n "$NAMESPACE" 2>/dev/null; then
+    if ! kubectl wait --for=condition=available --timeout=300s deployment/externalsource-controller-manager -n "$NAMESPACE" 2>/dev/null; then
         error "Controller failed to become ready within timeout"
         warn "Checking controller logs..."
-        kubectl logs -n "$NAMESPACE" deployment/controller-manager --tail=50 || true
+        kubectl logs -n "$NAMESPACE" deployment/externalsource-controller-manager --tail=50 || true
         return 1
     fi
     
