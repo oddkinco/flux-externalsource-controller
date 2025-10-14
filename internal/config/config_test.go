@@ -32,9 +32,10 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, 5*time.Minute, config.Retry.MaxDelay)
 	assert.Equal(t, 0.25, config.Retry.JitterFactor)
 
-	// Test transform defaults
-	assert.Equal(t, 30*time.Second, config.Transform.Timeout)
-	assert.Equal(t, int64(64*1024*1024), config.Transform.MemoryLimit)
+	// Test hooks defaults
+	assert.Equal(t, "/etc/hooks/whitelist.yaml", config.Hooks.WhitelistPath)
+	assert.Equal(t, "http://localhost:8081", config.Hooks.SidecarEndpoint)
+	assert.Equal(t, 30*time.Second, config.Hooks.DefaultTimeout)
 
 	// Test metrics defaults
 	assert.True(t, config.Metrics.Enabled)
@@ -49,7 +50,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 		"HTTP_TIMEOUT", "HTTP_MAX_IDLE_CONNS", "HTTP_MAX_IDLE_CONNS_PER_HOST", "HTTP_MAX_CONNS_PER_HOST",
 		"HTTP_IDLE_CONN_TIMEOUT", "HTTP_USER_AGENT",
 		"RETRY_MAX_ATTEMPTS", "RETRY_BASE_DELAY", "RETRY_MAX_DELAY", "RETRY_JITTER_FACTOR",
-		"TRANSFORM_TIMEOUT", "TRANSFORM_MEMORY_LIMIT",
+		"HOOK_WHITELIST_PATH", "HOOK_EXECUTOR_ENDPOINT", "HOOK_DEFAULT_TIMEOUT",
 		"METRICS_ENABLED", "METRICS_INTERVAL",
 	}
 
@@ -129,14 +130,16 @@ func TestLoadFromEnvironment(t *testing.T) {
 			},
 		},
 		{
-			name: "transform configuration",
+			name: "hooks configuration",
 			envVars: map[string]string{
-				"TRANSFORM_TIMEOUT":      "45s",
-				"TRANSFORM_MEMORY_LIMIT": "134217728", // 128MB
+				"HOOK_WHITELIST_PATH":    "/custom/whitelist.yaml",
+				"HOOK_EXECUTOR_ENDPOINT": "http://localhost:9090",
+				"HOOK_DEFAULT_TIMEOUT":   "45s",
 			},
 			validate: func(t *testing.T, config *Config) {
-				assert.Equal(t, 45*time.Second, config.Transform.Timeout)
-				assert.Equal(t, int64(134217728), config.Transform.MemoryLimit)
+				assert.Equal(t, "/custom/whitelist.yaml", config.Hooks.WhitelistPath)
+				assert.Equal(t, "http://localhost:9090", config.Hooks.SidecarEndpoint)
+				assert.Equal(t, 45*time.Second, config.Hooks.DefaultTimeout)
 			},
 		},
 		{
@@ -233,23 +236,23 @@ func TestValidate(t *testing.T) {
 			errorMsg:    "retry max attempts must be non-negative",
 		},
 		{
-			name: "invalid transform timeout",
+			name: "invalid hooks timeout",
 			config: &Config{
-				Storage:   StorageConfig{Backend: "memory"},
-				HTTP:      HTTPConfig{Timeout: 30 * time.Second, IdleConnTimeout: 90 * time.Second},
-				Retry:     RetryConfig{MaxAttempts: 3, BaseDelay: 1 * time.Second, MaxDelay: 5 * time.Minute},
-				Transform: TransformConfig{Timeout: 0},
+				Storage: StorageConfig{Backend: "memory"},
+				HTTP:    HTTPConfig{Timeout: 30 * time.Second, IdleConnTimeout: 90 * time.Second},
+				Retry:   RetryConfig{MaxAttempts: 3, BaseDelay: 1 * time.Second, MaxDelay: 5 * time.Minute},
+				Hooks:   HooksConfig{WhitelistPath: "/etc/hooks/whitelist.yaml", SidecarEndpoint: "http://localhost:8081", DefaultTimeout: 0},
 			},
 			expectError: true,
-			errorMsg:    "transform timeout must be positive",
+			errorMsg:    "hooks default timeout must be positive",
 		},
 		{
 			name: "invalid metrics interval",
 			config: &Config{
-				Storage:   StorageConfig{Backend: "memory"},
-				HTTP:      HTTPConfig{Timeout: 30 * time.Second, IdleConnTimeout: 90 * time.Second},
-				Retry:     RetryConfig{MaxAttempts: 3, BaseDelay: 1 * time.Second, MaxDelay: 5 * time.Minute},
-				Transform: TransformConfig{Timeout: 30 * time.Second, MemoryLimit: 64 * 1024 * 1024},
+				Storage: StorageConfig{Backend: "memory"},
+				HTTP:    HTTPConfig{Timeout: 30 * time.Second, IdleConnTimeout: 90 * time.Second},
+				Retry:   RetryConfig{MaxAttempts: 3, BaseDelay: 1 * time.Second, MaxDelay: 5 * time.Minute},
+				Hooks:   HooksConfig{WhitelistPath: "/etc/hooks/whitelist.yaml", SidecarEndpoint: "http://localhost:8081", DefaultTimeout: 30 * time.Second},
 				Metrics: MetricsConfig{
 					Enabled:  true,
 					Interval: -1 * time.Second,
@@ -279,7 +282,7 @@ func TestLoadFromEnvironmentWithInvalidValues(t *testing.T) {
 	originalEnv := make(map[string]string)
 	envVars := []string{
 		"HTTP_TIMEOUT", "HTTP_MAX_IDLE_CONNS", "RETRY_MAX_ATTEMPTS",
-		"RETRY_JITTER_FACTOR", "TRANSFORM_MEMORY_LIMIT", "METRICS_ENABLED",
+		"RETRY_JITTER_FACTOR", "HOOK_DEFAULT_TIMEOUT", "METRICS_ENABLED",
 	}
 
 	for _, env := range envVars {
