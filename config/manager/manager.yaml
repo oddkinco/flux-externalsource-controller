@@ -92,7 +92,7 @@ spec:
         - name: RETRY_MAX_DELAY
           value: "5m"
         - name: HOOK_EXECUTOR_ENDPOINT
-          value: "http://localhost:8081"
+          value: "http://localhost:8082"
         - name: HOOK_WHITELIST_PATH
           value: "/etc/hooks/whitelist.yaml"
         - name: HOOK_DEFAULT_TIMEOUT
@@ -126,7 +126,7 @@ spec:
         image: ghcr.io/oddkinco/hook-executor:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8081
+        - containerPort: 8082
           name: http
           protocol: TCP
         securityContext:
@@ -138,13 +138,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8081
+            port: 8082
           initialDelaySeconds: 10
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
-            port: 8081
+            port: 8082
           initialDelaySeconds: 5
           periodSeconds: 5
         resources:

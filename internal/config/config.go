@@ -165,7 +165,7 @@ func DefaultConfig() *Config {
 		},
 		Hooks: HooksConfig{
 			WhitelistPath:   "/etc/hooks/whitelist.yaml",
-			SidecarEndpoint: "http://localhost:8081",
+			SidecarEndpoint: "http://localhost:8082",
 			DefaultTimeout:  30 * time.Second,
 		},
 		Metrics: MetricsConfig{

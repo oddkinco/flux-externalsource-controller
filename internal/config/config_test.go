@@ -34,7 +34,7 @@ func TestDefaultConfig(t *testing.T) {
 
 	// Test hooks defaults
 	assert.Equal(t, "/etc/hooks/whitelist.yaml", config.Hooks.WhitelistPath)
-	assert.Equal(t, "http://localhost:8081", config.Hooks.SidecarEndpoint)
+	assert.Equal(t, "http://localhost:8082", config.Hooks.SidecarEndpoint)
 	assert.Equal(t, 30*time.Second, config.Hooks.DefaultTimeout)
 
 	// Test metrics defaults
@@ -241,7 +241,7 @@ func TestValidate(t *testing.T) {
 				Storage: StorageConfig{Backend: "memory"},
 				HTTP:    HTTPConfig{Timeout: 30 * time.Second, IdleConnTimeout: 90 * time.Second},
 				Retry:   RetryConfig{MaxAttempts: 3, BaseDelay: 1 * time.Second, MaxDelay: 5 * time.Minute},
-				Hooks:   HooksConfig{WhitelistPath: "/etc/hooks/whitelist.yaml", SidecarEndpoint: "http://localhost:8081", DefaultTimeout: 0},
+				Hooks:   HooksConfig{WhitelistPath: "/etc/hooks/whitelist.yaml", SidecarEndpoint: "http://localhost:8082", DefaultTimeout: 0},
 			},
 			expectError: true,
 			errorMsg:    "hooks default timeout must be positive",
@@ -252,7 +252,7 @@ func TestValidate(t *testing.T) {
 				Storage: StorageConfig{Backend: "memory"},
 				HTTP:    HTTPConfig{Timeout: 30 * time.Second, IdleConnTimeout: 90 * time.Second},
 				Retry:   RetryConfig{MaxAttempts: 3, BaseDelay: 1 * time.Second, MaxDelay: 5 * time.Minute},
-				Hooks:   HooksConfig{WhitelistPath: "/etc/hooks/whitelist.yaml", SidecarEndpoint: "http://localhost:8081", DefaultTimeout: 30 * time.Second},
+				Hooks:   HooksConfig{WhitelistPath: "/etc/hooks/whitelist.yaml", SidecarEndpoint: "http://localhost:8082", DefaultTimeout: 30 * time.Second},
 				Metrics: MetricsConfig{
 					Enabled:  true,
 					Interval: -1 * time.Second,
