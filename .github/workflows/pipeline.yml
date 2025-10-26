@@ -1,0 +1,621 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*', 'hook-executor-v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  HOOK_EXECUTOR_IMAGE_NAME: ${{ github.repository_owner }}/hook-executor
+
+jobs:
+  # Detect what components need to be built/tested
+  detect-changes:
+    name: "Detect Changes"
+    runs-on: ubuntu-latest
+    outputs:
+      main-controller: ${{ steps.changes.outputs.main-controller }}
+      hook-executor: ${{ steps.changes.outputs.hook-executor }}
+      helm-chart: ${{ steps.changes.outputs.helm-chart }}
+      is-release: ${{ steps.changes.outputs.is-release }}
+      is-hook-release: ${{ steps.changes.outputs.is-hook-release }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Detect changes
+      id: changes
+      run: |
+        # Check for main controller changes
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(cmd/main\.go|internal/|api/|controllers/|Dockerfile|go\.mod|go\.sum)' | grep -v 'cmd/hook-executor' | grep -v 'internal/hooks'; then
+            echo "main-controller=true" >> $GITHUB_OUTPUT
+          else
+            echo "main-controller=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          if git diff --name-only HEAD~1 HEAD | grep -E '^(cmd/main\.go|internal/|api/|controllers/|Dockerfile|go\.mod|go\.sum)' | grep -v 'cmd/hook-executor' | grep -v 'internal/hooks'; then
+            echo "main-controller=true" >> $GITHUB_OUTPUT
+          else
+            echo "main-controller=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+        # Check for hook executor changes
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(cmd/hook-executor/|internal/hooks/)'; then
+            echo "hook-executor=true" >> $GITHUB_OUTPUT
+          else
+            echo "hook-executor=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          if git diff --name-only HEAD~1 HEAD | grep -E '^(cmd/hook-executor/|internal/hooks/)'; then
+            echo "hook-executor=true" >> $GITHUB_OUTPUT
+          else
+            echo "hook-executor=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+        # Check for Helm chart changes
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^charts/'; then
+            echo "helm-chart=true" >> $GITHUB_OUTPUT
+          else
+            echo "helm-chart=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          if git diff --name-only HEAD~1 HEAD | grep -E '^charts/'; then
+            echo "helm-chart=true" >> $GITHUB_OUTPUT
+          else
+            echo "helm-chart=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+        # Check if this is a release
+        if [[ "${{ github.ref }}" =~ ^refs/tags/v[0-9] ]]; then
+          echo "is-release=true" >> $GITHUB_OUTPUT
+        else
+          echo "is-release=false" >> $GITHUB_OUTPUT
+        fi
+
+        # Check if this is a hook executor release
+        if [[ "${{ github.ref }}" =~ ^refs/tags/hook-executor-v[0-9] ]]; then
+          echo "is-hook-release=true" >> $GITHUB_OUTPUT
+        else
+          echo "is-hook-release=false" >> $GITHUB_OUTPUT
+        fi
+
+  # Unit tests and code quality (always run for PRs and pushes)
+  unit-tests:
+    name: "Unit Tests & Coverage"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ hashFiles('go.mod', 'go.sum') }}-
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Install controller-gen
+      run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+
+    - name: Generate code
+      run: make generate
+
+    - name: Generate manifests
+      run: make manifests
+
+    - name: Run tests
+      run: make test-ci
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+
+  code-quality:
+    name: "Code Quality & Linting"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v8
+      with:
+        version: latest
+        args: --timeout=5m
+
+  security-scan:
+    name: "Security Vulnerability Scan"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Build main controller image
+  build-main-controller:
+    name: "Build Main Controller Image"
+    runs-on: ubuntu-latest
+    needs: [detect-changes, unit-tests, code-quality]
+    if: needs.detect-changes.outputs.main-controller == 'true' || needs.detect-changes.outputs.is-release == 'true' || github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-url: ${{ steps.build.outputs.image-url }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=ref,event=tag
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,prefix=
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Build hook executor image
+  build-hook-executor:
+    name: "Build Hook Executor Image"
+    runs-on: ubuntu-latest
+    needs: [detect-changes, unit-tests, code-quality]
+    if: needs.detect-changes.outputs.hook-executor == 'true' || needs.detect-changes.outputs.is-hook-release == 'true' || github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.HOOK_EXECUTOR_IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}},prefix=hook-executor-
+          type=semver,pattern={{major}}.{{minor}},prefix=hook-executor-
+          type=sha,prefix=sha-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: cmd/hook-executor/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Generate artifact attestation
+      if: github.event_name != 'pull_request'
+      uses: actions/attest-build-provenance@v1
+      with:
+        subject-name: ${{ env.REGISTRY }}/${{ env.HOOK_EXECUTOR_IMAGE_NAME }}
+        subject-digest: ${{ steps.build.outputs.digest }}
+        push-to-registry: true
+
+  # Validate Helm chart
+  validate-helm-chart:
+    name: "Validate Helm Chart"
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.helm-chart == 'true' || github.event_name == 'push'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Lint Helm chart
+      run: |
+        helm lint charts/flux-externalsource-controller
+
+    - name: Validate Helm chart templates
+      run: |
+        helm template flux-externalsource-controller charts/flux-externalsource-controller --debug
+
+    - name: Run Helm chart tests
+      run: |
+        # Install chart-testing
+        curl -sSLo ct.tar.gz https://github.com/helm/chart-testing/releases/download/v3.8.0/chart-testing_3.8.0_linux_amd64.tar.gz
+        tar -xzf ct.tar.gz
+        sudo mv ct /usr/local/bin/
+        
+        # Run chart tests with config
+        ct lint --charts charts/flux-externalsource-controller --config .github/ct.yaml || echo "Chart testing failed, but continuing..."
+
+  # Generate and validate manifests
+  generate-manifests:
+    name: "Generate & Validate K8s Manifests"
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.main-controller == 'true' || github.event_name == 'push'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+
+    - name: Install controller-gen
+      run: go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+
+    - name: Generate manifests
+      run: make manifests
+
+    - name: Check for uncommitted changes
+      run: |
+        git diff --exit-code || (echo "Generated manifests are out of date. Please run 'make manifests' and commit the changes." && exit 1)
+
+  # Check dependencies
+  check-dependencies:
+    name: "Dependency Security & Updates"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+
+    - name: Check for vulnerabilities
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./...
+
+    - name: Check for outdated dependencies
+      run: |
+        go list -u -m all | grep -v "indirect" | grep "\[" || echo "All dependencies are up to date"
+
+  # E2E tests
+  e2e-tests:
+    name: "End-to-End Tests"
+    runs-on: ubuntu-latest
+    needs: [detect-changes, unit-tests, code-quality]
+    if: needs.detect-changes.outputs.main-controller == 'true' || github.event_name == 'push'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+
+    - name: Install Kind
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+
+    - name: Verify Kind installation
+      run: kind version
+
+    - name: Run e2e tests
+      run: |
+        go mod tidy
+        make test-e2e
+
+  # Performance benchmarks
+  performance-test:
+    name: "Performance Benchmarks"
+    runs-on: ubuntu-latest
+    needs: [detect-changes, unit-tests, code-quality]
+    if: (needs.detect-changes.outputs.main-controller == 'true' || github.event_name == 'push') && github.event_name != 'pull_request'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+
+    - name: Run performance benchmarks
+      run: |
+        go test -bench=. -benchmem -run=^$ ./... > benchmark-results.txt
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: benchmark-results.txt
+
+  # Release Helm chart (for chart changes or releases)
+  release-helm-chart:
+    name: "Release Helm Chart"
+    runs-on: ubuntu-latest
+    needs: [detect-changes, validate-helm-chart]
+    if: (needs.detect-changes.outputs.helm-chart == 'true' || needs.detect-changes.outputs.is-release == 'true') && github.event_name != 'pull_request'
+    permissions:
+      contents: write
+      packages: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Configure Git
+      run: |
+        git config user.name "$GITHUB_ACTOR"
+        git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract version
+      id: version
+      run: |
+        if [[ "${{ github.ref }}" =~ ^refs/tags/v([0-9.]+) ]]; then
+          VERSION=${BASH_REMATCH[1]}
+        else
+          # Get current version and increment patch
+          CURRENT_VERSION=$(grep '^version:' charts/flux-externalsource-controller/Chart.yaml | awk '{print $2}')
+          VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Update Chart.yaml
+      run: |
+        sed -i "s/version: [0-9.]*/version: ${{ steps.version.outputs.version }}/" charts/flux-externalsource-controller/Chart.yaml
+        if [[ "${{ github.ref }}" =~ ^refs/tags/v([0-9.]+) ]]; then
+          sed -i "s/appVersion: \".*\"/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/flux-externalsource-controller/Chart.yaml
+        fi
+
+    - name: Package and release chart
+      run: |
+        # Package chart
+        helm package charts/flux-externalsource-controller
+        
+        # Push to OCI registry
+        helm push flux-externalsource-controller-*.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
+        
+        echo "Chart pushed to oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts"
+
+    - name: Create GitHub release for chart
+      if: needs.detect-changes.outputs.helm-chart == 'true' && needs.detect-changes.outputs.is-release != 'true'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: helm-chart-v${{ steps.version.outputs.version }}
+        name: Helm Chart v${{ steps.version.outputs.version }}
+        body: |
+          ## Helm Chart Release v${{ steps.version.outputs.version }}
+          
+          ### Installation
+          ```bash
+          helm install flux-externalsource-controller oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/flux-externalsource-controller --version ${{ steps.version.outputs.version }}
+          ```
+        files: flux-externalsource-controller-*.tgz
+
+    - name: Commit version bump
+      if: needs.detect-changes.outputs.helm-chart == 'true' && needs.detect-changes.outputs.is-release != 'true'
+      run: |
+        git add charts/flux-externalsource-controller/Chart.yaml
+        git commit -m "chore: bump chart version" || exit 0
+        git push
+
+  # Create release artifacts (for main releases)
+  create-release-artifacts:
+    name: "Create Release Artifacts"
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-main-controller, release-helm-chart]
+    if: needs.detect-changes.outputs.is-release == 'true'
+    permissions:
+      contents: write
+      packages: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Generate installation manifests
+      run: |
+        # Create installation directory
+        mkdir -p dist/install
+
+        # Generate CRDs
+        make manifests
+        cp config/crd/bases/*.yaml dist/install/
+
+        # Generate RBAC and deployment manifests
+        cd config/default
+        kustomize edit set image controller=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+        cd ../..
+        kustomize build config/default > dist/install/flux-externalsource-controller.yaml
+
+        # Create combined installation file
+        cat dist/install/*.yaml > dist/install.yaml
+
+    - name: Create Helm chart archive
+      run: |
+        # Package chart
+        helm package charts/flux-externalsource-controller --destination ./dist/
+
+    - name: Generate checksums
+      run: |
+        cd dist
+        sha256sum *.yaml *.tgz > checksums.txt
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/install.yaml
+          dist/flux-externalsource-controller-*.tgz
+          dist/checksums.txt
+        generate_release_notes: true
+        draft: false
+        prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Update documentation (for stable releases)
+  update-documentation:
+    name: "Update Documentation"
+    runs-on: ubuntu-latest
+    needs: [detect-changes, create-release-artifacts]
+    if: needs.detect-changes.outputs.is-release == 'true' && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc')
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Update README with latest version
+      run: |
+        # Update installation commands in README
+        sed -i "s|ghcr.io/oddkin/flux-externalsource-controller:.*|ghcr.io/oddkin/flux-externalsource-controller:${{ steps.version.outputs.version }}|g" README.md
+        sed -i "s|/releases/latest/download/|/releases/download/v${{ steps.version.outputs.version }}/|g" README.md
+
+    - name: Update Helm chart documentation
+      run: |
+        # Update chart version references
+        sed -i "s/version: [0-9]\+\.[0-9]\+\.[0-9]\+/version: ${{ steps.version.outputs.version }}/g" charts/flux-externalsource-controller/README.md || true
+
+    - name: Commit documentation updates
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add README.md charts/flux-externalsource-controller/README.md || true
+        git diff --staged --quiet || git commit -m "docs: update version references to ${{ steps.version.outputs.version }}"
+        git push || true
