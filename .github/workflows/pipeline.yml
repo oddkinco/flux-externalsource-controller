@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ main, develop ]
-    tags: [ 'v*', 'hook-executor-v*' ]
+    tags: [ 'v*', 'externalsource-hook-executor-v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  HOOK_EXECUTOR_IMAGE_NAME: ${{ github.repository_owner }}/hook-executor
+  HOOK_EXECUTOR_IMAGE_NAME: ${{ github.repository_owner }}/externalsource-hook-executor
 
 jobs:
   # Unit tests and code quality (always run for PRs and pushes)
@@ -195,8 +195,8 @@ jobs:
         tags: |
           type=ref,event=branch
           type=ref,event=pr
-          type=semver,pattern={{version}},prefix=hook-executor-
-          type=semver,pattern={{major}}.{{minor}},prefix=hook-executor-
+          type=semver,pattern={{version}},prefix=externalsource-hook-executor-
+          type=semver,pattern={{major}}.{{minor}},prefix=externalsource-hook-executor-
           type=sha,prefix=sha-
           type=raw,value=latest,enable={{is_default_branch}}
 
@@ -205,7 +205,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: cmd/hook-executor/Dockerfile
+        file: cmd/externalsource-hook-executor/Dockerfile
         platforms: linux/amd64,linux/arm64
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
