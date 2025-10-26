@@ -14,84 +14,6 @@ env:
   HOOK_EXECUTOR_IMAGE_NAME: ${{ github.repository_owner }}/hook-executor
 
 jobs:
-  # Detect what components need to be built/tested
-  detect-changes:
-    name: "Detect Changes"
-    runs-on: ubuntu-latest
-    outputs:
-      main-controller: ${{ steps.changes.outputs.main-controller }}
-      hook-executor: ${{ steps.changes.outputs.hook-executor }}
-      helm-chart: ${{ steps.changes.outputs.helm-chart }}
-      is-release: ${{ steps.changes.outputs.is-release }}
-      is-hook-release: ${{ steps.changes.outputs.is-hook-release }}
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Detect changes
-      id: changes
-      run: |
-        # Check for main controller changes
-        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(cmd/main\.go|internal/|api/|controllers/|Dockerfile|go\.mod|go\.sum)' | grep -v 'cmd/hook-executor' | grep -v 'internal/hooks'; then
-            echo "main-controller=true" >> $GITHUB_OUTPUT
-          else
-            echo "main-controller=false" >> $GITHUB_OUTPUT
-          fi
-        else
-          if git diff --name-only HEAD~1 HEAD | grep -E '^(cmd/main\.go|internal/|api/|controllers/|Dockerfile|go\.mod|go\.sum)' | grep -v 'cmd/hook-executor' | grep -v 'internal/hooks'; then
-            echo "main-controller=true" >> $GITHUB_OUTPUT
-          else
-            echo "main-controller=false" >> $GITHUB_OUTPUT
-          fi
-        fi
-
-        # Check for hook executor changes
-        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(cmd/hook-executor/|internal/hooks/)'; then
-            echo "hook-executor=true" >> $GITHUB_OUTPUT
-          else
-            echo "hook-executor=false" >> $GITHUB_OUTPUT
-          fi
-        else
-          if git diff --name-only HEAD~1 HEAD | grep -E '^(cmd/hook-executor/|internal/hooks/)'; then
-            echo "hook-executor=true" >> $GITHUB_OUTPUT
-          else
-            echo "hook-executor=false" >> $GITHUB_OUTPUT
-          fi
-        fi
-
-        # Check for Helm chart changes
-        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^charts/'; then
-            echo "helm-chart=true" >> $GITHUB_OUTPUT
-          else
-            echo "helm-chart=false" >> $GITHUB_OUTPUT
-          fi
-        else
-          if git diff --name-only HEAD~1 HEAD | grep -E '^charts/'; then
-            echo "helm-chart=true" >> $GITHUB_OUTPUT
-          else
-            echo "helm-chart=false" >> $GITHUB_OUTPUT
-          fi
-        fi
-
-        # Check if this is a release
-        if [[ "${{ github.ref }}" =~ ^refs/tags/v[0-9] ]]; then
-          echo "is-release=true" >> $GITHUB_OUTPUT
-        else
-          echo "is-release=false" >> $GITHUB_OUTPUT
-        fi
-
-        # Check if this is a hook executor release
-        if [[ "${{ github.ref }}" =~ ^refs/tags/hook-executor-v[0-9] ]]; then
-          echo "is-hook-release=true" >> $GITHUB_OUTPUT
-        else
-          echo "is-hook-release=false" >> $GITHUB_OUTPUT
-        fi
-
   # Unit tests and code quality (always run for PRs and pushes)
   unit-tests:
     name: "Unit Tests & Coverage"
@@ -187,8 +109,8 @@ jobs:
   build-main-controller:
     name: "Build Main Controller Image"
     runs-on: ubuntu-latest
-    needs: [detect-changes, unit-tests, code-quality]
-    if: needs.detect-changes.outputs.main-controller == 'true' || needs.detect-changes.outputs.is-release == 'true'
+    needs: [unit-tests, code-quality]
+    if: github.event_name == 'push' || github.ref_type == 'tag'
     permissions:
       contents: read
       packages: write
@@ -241,8 +163,8 @@ jobs:
   build-hook-executor:
     name: "Build Hook Executor Image"
     runs-on: ubuntu-latest
-    needs: [detect-changes, unit-tests, code-quality]
-    if: needs.detect-changes.outputs.hook-executor == 'true' || needs.detect-changes.outputs.is-hook-release == 'true'
+    needs: [unit-tests, code-quality]
+    if: github.event_name == 'push' || github.ref_type == 'tag'
     permissions:
       contents: read
       packages: write
@@ -337,8 +259,7 @@ jobs:
   generate-manifests:
     name: "Generate & Validate K8s Manifests"
     runs-on: ubuntu-latest
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.main-controller == 'true'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -385,8 +306,8 @@ jobs:
   e2e-tests:
     name: "End-to-End Tests"
     runs-on: ubuntu-latest
-    needs: [detect-changes, unit-tests, code-quality]
-    if: needs.detect-changes.outputs.main-controller == 'true'
+    needs: [unit-tests, code-quality]
+    if: github.event_name == 'push'
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -414,8 +335,8 @@ jobs:
   performance-test:
     name: "Performance Benchmarks"
     runs-on: ubuntu-latest
-    needs: [detect-changes, unit-tests, code-quality]
-    if: needs.detect-changes.outputs.main-controller == 'true' && github.event_name != 'pull_request'
+    needs: [unit-tests, code-quality]
+    if: github.event_name == 'push' && github.event_name != 'pull_request'
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -439,8 +360,8 @@ jobs:
   release-helm-chart:
     name: "Release Helm Chart"
     runs-on: ubuntu-latest
-    needs: [detect-changes, validate-helm-chart]
-    if: (needs.detect-changes.outputs.helm-chart == 'true' || needs.detect-changes.outputs.is-release == 'true') && github.event_name != 'pull_request'
+    needs: [validate-helm-chart]
+    if: github.ref_type == 'tag' && github.event_name != 'pull_request'
     permissions:
       contents: write
       packages: write
@@ -497,7 +418,7 @@ jobs:
         echo "Chart pushed to oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts"
 
     - name: Create GitHub release for chart
-      if: needs.detect-changes.outputs.helm-chart == 'true' && needs.detect-changes.outputs.is-release != 'true'
+      if: github.ref_type == 'tag'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: helm-chart-v${{ steps.version.outputs.version }}
@@ -512,7 +433,7 @@ jobs:
         files: flux-externalsource-controller-*.tgz
 
     - name: Commit version bump
-      if: needs.detect-changes.outputs.helm-chart == 'true' && needs.detect-changes.outputs.is-release != 'true'
+      if: github.ref_type == 'tag'
       run: |
         git add charts/flux-externalsource-controller/Chart.yaml
         git commit -m "chore: bump chart version" || exit 0
@@ -522,8 +443,8 @@ jobs:
   create-release-artifacts:
     name: "Create Release Artifacts"
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-main-controller, release-helm-chart]
-    if: needs.detect-changes.outputs.is-release == 'true'
+    needs: [build-main-controller, release-helm-chart]
+    if: github.ref_type == 'tag'
     permissions:
       contents: write
       packages: read
@@ -587,8 +508,8 @@ jobs:
   update-documentation:
     name: "Update Documentation"
     runs-on: ubuntu-latest
-    needs: [detect-changes, create-release-artifacts]
-    if: needs.detect-changes.outputs.is-release == 'true' && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc')
+    needs: [create-release-artifacts]
+    if: github.ref_type == 'tag' && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc')
     permissions:
       contents: write
     steps:
