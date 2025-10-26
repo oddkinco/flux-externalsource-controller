@@ -135,42 +135,8 @@ build_controller_image() {
 
 # Setup test environment
 setup_test_environment() {
-    log "Setting up test environment..."
-    
-    # Create namespace if it doesn't exist
-    kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-    
-    # Install CRDs
-    log "Installing CRDs..."
-    if ! make install; then
-        error "Failed to install CRDs"
-        return 1
-    fi
-    
-    # Deploy controller with test image
-    log "Deploying controller..."
-    if ! make deploy IMG="$CONTROLLER_IMAGE"; then
-        error "Failed to deploy controller"
-        error "This usually indicates an issue with the Kubernetes manifests"
-        return 1
-    fi
-    
-    # Wait for controller to be ready
-    log "Waiting for controller to be ready..."
-    if ! kubectl wait --for=condition=available --timeout=300s deployment/externalsource-controller-manager -n "$NAMESPACE" 2>/dev/null; then
-        error "Controller failed to become ready within timeout"
-        warn "Checking deployment status..."
-        kubectl get deployment -n "$NAMESPACE" externalsource-controller-manager -o wide || true
-        warn "Checking pod status..."
-        kubectl get pods -n "$NAMESPACE" -l control-plane=controller-manager -o wide || true
-        warn "Checking pod description..."
-        kubectl describe pods -n "$NAMESPACE" -l control-plane=controller-manager || true
-        warn "Checking controller logs..."
-        kubectl logs -n "$NAMESPACE" deployment/externalsource-controller-manager --tail=50 --all-containers || true
-        return 1
-    fi
-    
-    log "Test environment setup complete"
+    log "Test environment ready - images loaded into Kind cluster"
+    log "Ginkgo tests will handle namespace creation, CRD installation, and controller deployment"
 }
 
 # Run e2e tests

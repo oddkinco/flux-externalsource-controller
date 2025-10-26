@@ -87,9 +87,39 @@ var _ = BeforeSuite(func() {
 			_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: CertManager is already installed. Skipping installation...\n")
 		}
 	}
+
+	// Install CRDs once for all test suites
+	By("installing CRDs for all test suites")
+	cmd = exec.Command("make", "install")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
 })
 
 var _ = AfterSuite(func() {
+	// Clean up any remaining ExternalSource resources before undeploying
+	// This prevents finalizer deadlocks where resources can't be deleted after controller is gone
+	By("removing any remaining ExternalSource resources")
+	cmd := exec.Command("kubectl", "delete", "externalsources", "--all", "-A", "--timeout=30s", "--ignore-not-found=true")
+	_, _ = utils.Run(cmd)
+
+	// If ExternalSources still exist (finalizer issue), patch them to remove finalizers
+	By("removing finalizers from any stuck ExternalSource resources")
+	cmd = exec.Command("kubectl", "patch", "externalsources", "--all", "-A",
+		"--type=json", "-p=[{\"op\": \"remove\", \"path\": \"/metadata/finalizers\"}]")
+	_, _ = utils.Run(cmd)
+
+	By("undeploying the controller-manager")
+	cmd = exec.Command("make", "undeploy")
+	_, _ = utils.Run(cmd)
+
+	By("uninstalling CRDs")
+	cmd = exec.Command("make", "uninstall")
+	_, _ = utils.Run(cmd)
+
+	By("removing manager namespace")
+	cmd = exec.Command("kubectl", "delete", "ns", "flux-externalsource-controller-system", "--ignore-not-found=true", "--timeout=60s")
+	_, _ = utils.Run(cmd)
+
 	// Teardown CertManager after the suite if not skipped and if it was not already installed
 	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")

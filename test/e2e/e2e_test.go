@@ -70,10 +70,7 @@ var _ = Describe("Manager", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
 
-		By("installing CRDs")
-		cmd = exec.Command("make", "install")
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
+		// Note: CRDs are installed globally in BeforeSuite
 
 		By("deploying the controller-manager")
 		cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
@@ -88,17 +85,12 @@ var _ = Describe("Manager", Ordered, func() {
 		cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", namespace)
 		_, _ = utils.Run(cmd)
 
-		By("undeploying the controller-manager")
-		cmd = exec.Command("make", "undeploy")
+		By("cleaning up the metrics ClusterRoleBinding")
+		cmd = exec.Command("kubectl", "delete", "clusterrolebinding", metricsRoleBindingName, "--ignore-not-found=true")
 		_, _ = utils.Run(cmd)
 
-		By("uninstalling CRDs")
-		cmd = exec.Command("make", "uninstall")
-		_, _ = utils.Run(cmd)
-
-		By("removing manager namespace")
-		cmd = exec.Command("kubectl", "delete", "ns", namespace)
-		_, _ = utils.Run(cmd)
+		// Note: CRD uninstall and controller undeploy moved to AfterSuite in e2e_suite_test.go
+		// to ensure they run after ALL test suites complete
 	})
 
 	// After each test, check for failures and collect logs, events,
@@ -183,7 +175,7 @@ var _ = Describe("Manager", Ordered, func() {
 		It("should ensure the metrics endpoint is serving metrics", func() {
 			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
 			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,
-				"--clusterrole=flux-externalsource-controller-metrics-reader",
+				"--clusterrole=externalsource-metrics-reader",
 				fmt.Sprintf("--serviceaccount=%s:%s", namespace, serviceAccountName),
 			)
 			_, err := utils.Run(cmd)
@@ -283,6 +275,11 @@ metadata:
   labels:
     app: test-http-server
 spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: server
     image: nginx:alpine
@@ -291,10 +288,24 @@ spec:
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: run
+      mountPath: /var/run
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
   volumes:
   - name: config
     configMap:
       name: test-data
+  - name: cache
+    emptyDir: {}
+  - name: run
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -415,6 +426,11 @@ metadata:
   labels:
     app: hooks-test-server
 spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: server
     image: nginx:alpine
@@ -423,10 +439,24 @@ spec:
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: run
+      mountPath: /var/run
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
   volumes:
   - name: config
     configMap:
       name: hooks-test-data
+  - name: cache
+    emptyDir: {}
+  - name: run
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
