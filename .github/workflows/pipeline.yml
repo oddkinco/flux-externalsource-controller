@@ -188,7 +188,7 @@ jobs:
     name: "Build Main Controller Image"
     runs-on: ubuntu-latest
     needs: [detect-changes, unit-tests, code-quality]
-    if: needs.detect-changes.outputs.main-controller == 'true' || needs.detect-changes.outputs.is-release == 'true' || github.event_name == 'push'
+    if: needs.detect-changes.outputs.main-controller == 'true' || needs.detect-changes.outputs.is-release == 'true'
     permissions:
       contents: read
       packages: write
@@ -242,7 +242,7 @@ jobs:
     name: "Build Hook Executor Image"
     runs-on: ubuntu-latest
     needs: [detect-changes, unit-tests, code-quality]
-    if: needs.detect-changes.outputs.hook-executor == 'true' || needs.detect-changes.outputs.is-hook-release == 'true' || github.event_name == 'push'
+    if: needs.detect-changes.outputs.hook-executor == 'true' || needs.detect-changes.outputs.is-hook-release == 'true'
     permissions:
       contents: read
       packages: write
@@ -300,6 +300,8 @@ jobs:
         push-to-registry: true
 
   # Validate Helm chart
+  # Note: This job runs on every PR/push regardless of changes to ensure Helm chart
+  # is always valid. We removed the detect-changes dependency to make it run independently.
   validate-helm-chart:
     name: "Validate Helm Chart"
     runs-on: ubuntu-latest
@@ -336,7 +338,7 @@ jobs:
     name: "Generate & Validate K8s Manifests"
     runs-on: ubuntu-latest
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.main-controller == 'true' || github.event_name == 'push'
+    if: needs.detect-changes.outputs.main-controller == 'true'
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -384,7 +386,7 @@ jobs:
     name: "End-to-End Tests"
     runs-on: ubuntu-latest
     needs: [detect-changes, unit-tests, code-quality]
-    if: needs.detect-changes.outputs.main-controller == 'true' || github.event_name == 'push'
+    if: needs.detect-changes.outputs.main-controller == 'true'
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -413,7 +415,7 @@ jobs:
     name: "Performance Benchmarks"
     runs-on: ubuntu-latest
     needs: [detect-changes, unit-tests, code-quality]
-    if: (needs.detect-changes.outputs.main-controller == 'true' || github.event_name == 'push') && github.event_name != 'pull_request'
+    if: needs.detect-changes.outputs.main-controller == 'true' && github.event_name != 'pull_request'
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
