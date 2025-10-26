@@ -407,7 +407,20 @@ jobs:
           sed -i "s/appVersion: \".*\"/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/flux-externalsource-controller/Chart.yaml
         fi
 
+    - name: Check if chart version already exists
+      id: check-existing
+      run: |
+        # Check if the chart version already exists in OCI registry
+        if helm show chart oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/flux-externalsource-controller --version ${{ steps.version.outputs.version }} >/dev/null 2>&1; then
+          echo "Chart version ${{ steps.version.outputs.version }} already exists in registry"
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Chart version ${{ steps.version.outputs.version }} does not exist in registry"
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Package and release chart
+      if: steps.check-existing.outputs.exists == 'false'
       run: |
         # Package chart
         helm package charts/flux-externalsource-controller
@@ -417,8 +430,13 @@ jobs:
         
         echo "Chart pushed to oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts"
 
+    - name: Skip chart release (version already exists)
+      if: steps.check-existing.outputs.exists == 'true'
+      run: |
+        echo "Skipping chart release - version ${{ steps.version.outputs.version }} already exists"
+
     - name: Create GitHub release for chart
-      if: github.ref_type == 'tag'
+      if: github.ref_type == 'tag' && steps.check-existing.outputs.exists == 'false'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: helm-chart-v${{ steps.version.outputs.version }}
@@ -433,7 +451,7 @@ jobs:
         files: flux-externalsource-controller-*.tgz
 
     - name: Commit version bump
-      if: github.ref_type == 'tag'
+      if: github.ref_type == 'tag' && steps.check-existing.outputs.exists == 'false'
       run: |
         git add charts/flux-externalsource-controller/Chart.yaml
         git commit -m "chore: bump chart version" || exit 0
