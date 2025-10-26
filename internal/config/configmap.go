@@ -87,7 +87,7 @@ func (l *ConfigMapLoader) loadFromData(data map[string]string, config *Config) e
 	l.loadStorageConfig(data, config)
 	l.loadHTTPConfig(data, config)
 	l.loadRetryConfig(data, config)
-	l.loadTransformConfig(data, config)
+	l.loadHooksConfig(data, config)
 	l.loadMetricsConfig(data, config)
 
 	return nil
@@ -183,16 +183,17 @@ func (l *ConfigMapLoader) loadRetryConfig(data map[string]string, config *Config
 	}
 }
 
-// loadTransformConfig loads transformation configuration from ConfigMap data
-func (l *ConfigMapLoader) loadTransformConfig(data map[string]string, config *Config) {
-	if timeoutStr, exists := data["transform.timeout"]; exists {
-		if timeout, err := time.ParseDuration(timeoutStr); err == nil {
-			config.Transform.Timeout = timeout
-		}
+// loadHooksConfig loads hooks configuration from ConfigMap data
+func (l *ConfigMapLoader) loadHooksConfig(data map[string]string, config *Config) {
+	if whitelistPath, exists := data["hooks.whitelistPath"]; exists {
+		config.Hooks.WhitelistPath = whitelistPath
 	}
-	if memoryLimitStr, exists := data["transform.memoryLimit"]; exists {
-		if memoryLimit, err := strconv.ParseInt(memoryLimitStr, 10, 64); err == nil {
-			config.Transform.MemoryLimit = memoryLimit
+	if endpoint, exists := data["hooks.sidecarEndpoint"]; exists {
+		config.Hooks.SidecarEndpoint = endpoint
+	}
+	if timeoutStr, exists := data["hooks.defaultTimeout"]; exists {
+		if timeout, err := time.ParseDuration(timeoutStr); err == nil {
+			config.Hooks.DefaultTimeout = timeout
 		}
 	}
 }

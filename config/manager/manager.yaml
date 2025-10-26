@@ -91,7 +91,11 @@ spec:
           value: "1s"
         - name: RETRY_MAX_DELAY
           value: "5m"
-        - name: TRANSFORM_TIMEOUT
+        - name: HOOK_EXECUTOR_ENDPOINT
+          value: "http://localhost:8082"
+        - name: HOOK_WHITELIST_PATH
+          value: "/etc/hooks/whitelist.yaml"
+        - name: HOOK_DEFAULT_TIMEOUT
           value: "30s"
         livenessProbe:
           httpGet:
@@ -114,7 +118,49 @@ spec:
           requests:
             cpu: 100m
             memory: 256Mi
-        volumeMounts: []
-      volumes: []
+        volumeMounts:
+        - name: hook-whitelist
+          mountPath: /etc/hooks
+          readOnly: true
+      - name: hook-executor
+        image: ghcr.io/oddkinco/hook-executor:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8082
+          name: http
+          protocol: TCP
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - "ALL"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8082
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        volumeMounts:
+        - name: hook-whitelist
+          mountPath: /etc/hooks
+          readOnly: true
+      volumes:
+      - name: hook-whitelist
+        configMap:
+          name: hook-whitelist
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

@@ -45,25 +45,70 @@ type ExternalSourceSpec struct {
 	// +optional
 	DestinationPath string `json:"destinationPath,omitempty"`
 
-	// Transform specifies optional data transformation
+	// MaxRetries specifies the maximum number of retry attempts across all hooks and the request
+	// +kubebuilder:default=3
 	// +optional
-	Transform *TransformSpec `json:"transform,omitempty"`
+	MaxRetries int `json:"maxRetries,omitempty"`
+
+	// Hooks specifies optional pre-request and post-request command hooks
+	// +optional
+	Hooks *HooksSpec `json:"hooks,omitempty"`
 
 	// Generator specifies the source generator configuration
 	// +required
 	Generator GeneratorSpec `json:"generator"`
 }
 
-// TransformSpec defines data transformation configuration
-type TransformSpec struct {
-	// Type specifies the transformation engine type
-	// +kubebuilder:validation:Enum=cel
-	// +required
-	Type string `json:"type"`
+// HooksSpec defines pre-request and post-request hooks configuration
+type HooksSpec struct {
+	// PreRequest hooks are executed before the HTTP request
+	// +optional
+	PreRequest []HookSpec `json:"preRequest,omitempty"`
 
-	// Expression contains the transformation expression
+	// PostRequest hooks are executed after the HTTP request
+	// +optional
+	PostRequest []HookSpec `json:"postRequest,omitempty"`
+}
+
+// HookSpec defines a single hook configuration
+type HookSpec struct {
+	// Name is a unique identifier for this hook
 	// +required
-	Expression string `json:"expression"`
+	Name string `json:"name"`
+
+	// Command is the executable to run (must be in the whitelist)
+	// +required
+	Command string `json:"command"`
+
+	// Args are the arguments to pass to the command
+	// +optional
+	Args []string `json:"args,omitempty"`
+
+	// Timeout specifies the maximum duration for the hook execution
+	// +kubebuilder:default="30s"
+	// +optional
+	Timeout string `json:"timeout,omitempty"`
+
+	// RetryPolicy specifies how to handle failures
+	// +kubebuilder:validation:Enum=ignore;retry;fail
+	// +kubebuilder:default=fail
+	// +optional
+	RetryPolicy string `json:"retryPolicy,omitempty"`
+
+	// Env specifies environment variables for the hook
+	// +optional
+	Env []EnvVar `json:"env,omitempty"`
+}
+
+// EnvVar represents an environment variable
+type EnvVar struct {
+	// Name of the environment variable
+	// +required
+	Name string `json:"name"`
+
+	// Value of the environment variable
+	// +required
+	Value string `json:"value"`
 }
 
 // GeneratorSpec defines the source generator configuration

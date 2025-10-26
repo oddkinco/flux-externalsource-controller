@@ -128,10 +128,18 @@ func TestExternalSourceSpecDeepCopy(t *testing.T) {
 				Method: "POST",
 			},
 		},
-		Transform: &TransformSpec{
-			Type:       "cel",
-			Expression: "data.items",
+		Hooks: &HooksSpec{
+			PostRequest: []HookSpec{
+				{
+					Name:        "transform-jq",
+					Command:     "jq",
+					Args:        []string{".items"},
+					Timeout:     "30s",
+					RetryPolicy: "fail",
+				},
+			},
 		},
+		MaxRetries:      3,
 		DestinationPath: "items.json",
 	}
 
@@ -144,10 +152,10 @@ func TestExternalSourceSpecDeepCopy(t *testing.T) {
 
 	// Modify copy and verify original is unchanged
 	copied.Generator.HTTP.URL = testModifiedURL
-	copied.Transform.Expression = "modified.expression"
+	copied.Hooks.PostRequest[0].Command = "modified-command"
 
 	assert.NotEqual(t, original.Generator.HTTP.URL, copied.Generator.HTTP.URL)
-	assert.NotEqual(t, original.Transform.Expression, copied.Transform.Expression)
+	assert.NotEqual(t, original.Hooks.PostRequest[0].Command, copied.Hooks.PostRequest[0].Command)
 }
 
 func TestGeneratorSpecDeepCopy(t *testing.T) {
@@ -193,23 +201,41 @@ func TestHTTPGeneratorSpecDeepCopy(t *testing.T) {
 	assert.NotEqual(t, original.URL, copied.URL)
 }
 
-func TestTransformSpecDeepCopy(t *testing.T) {
-	original := TransformSpec{
-		Type:       "cel",
-		Expression: "data.transform(item, item.value * 2)",
+func TestHooksSpecDeepCopy(t *testing.T) {
+	original := HooksSpec{
+		PreRequest: []HookSpec{
+			{
+				Name:        "prepare",
+				Command:     "bash",
+				Args:        []string{"-c", "echo hello"},
+				Timeout:     "30s",
+				RetryPolicy: "fail",
+			},
+		},
+		PostRequest: []HookSpec{
+			{
+				Name:        "transform",
+				Command:     "jq",
+				Args:        []string{".data"},
+				Timeout:     "30s",
+				RetryPolicy: "retry",
+			},
+		},
 	}
 
 	copied := original.DeepCopy()
 
 	// Verify deep copy
 	assert.NotSame(t, &original, copied)
-	assert.Equal(t, original.Type, copied.Type)
-	assert.Equal(t, original.Expression, copied.Expression)
+	assert.Equal(t, len(original.PreRequest), len(copied.PreRequest))
+	assert.Equal(t, original.PreRequest[0].Command, copied.PreRequest[0].Command)
+	assert.Equal(t, len(original.PostRequest), len(copied.PostRequest))
+	assert.Equal(t, original.PostRequest[0].Command, copied.PostRequest[0].Command)
 
 	// Modify copy and verify original is unchanged
-	copied.Expression = "modified.expression"
+	copied.PostRequest[0].Command = "modified-command"
 
-	assert.NotEqual(t, original.Expression, copied.Expression)
+	assert.NotEqual(t, original.PostRequest[0].Command, copied.PostRequest[0].Command)
 }
 
 func TestSecretReferenceDeepCopy(t *testing.T) {

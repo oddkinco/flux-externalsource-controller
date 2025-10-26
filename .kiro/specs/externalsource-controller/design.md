@@ -52,10 +52,11 @@ The controller follows the standard Kubebuilder operator pattern with these key 
 1. **Reconciler**: Implements the core reconciliation logic
 2. **Source Generator Factory**: Creates appropriate source generators based on type
 3. **Source Generators**: Pluggable implementations for different source types (HTTP, future types)
-4. **Transformer**: Executes CEL expressions in a sandboxed environment
-5. **Artifact Manager**: Packages and stores versioned artifacts
-6. **Storage Backend**: Pluggable interface for different storage implementations
-7. **Metrics Collector**: Exposes Prometheus metrics for observability
+4. **Hook Executor**: Executes whitelisted commands in sidecar for data processing
+5. **Whitelist Manager**: Validates commands against security whitelist
+6. **Artifact Manager**: Packages and stores versioned artifacts
+7. **Storage Backend**: Pluggable interface for different storage implementations
+8. **Metrics Collector**: Exposes Prometheus metrics for observability
 
 ## Extensibility Design
 
@@ -103,7 +104,8 @@ The primary API surface for users, defining the desired state of external data i
 **Key Fields:**
 - `spec.interval`: Reconciliation frequency (minimum 1m)
 - `spec.generator.http`: HTTP endpoint configuration
-- `spec.transform`: Optional CEL transformation
+- `spec.hooks`: Optional pre-request and post-request hooks
+- `spec.maxRetries`: Maximum retry attempts across all hooks
 - `spec.destinationPath`: Target path within artifact
 - `status.artifact`: Current artifact metadata
 - `status.conditions`: Resource health status
@@ -121,7 +123,8 @@ type ExternalSourceReconciler interface {
 **Responsibilities:**
 - Manage reconciliation lifecycle
 - Use factory to create appropriate source generator based on spec
-- Coordinate between source generator, transformer, and artifact manager
+- Coordinate between source generator, hook executor, and artifact manager
+- Execute pre-request and post-request hooks with retry policies
 - Update resource status and conditions
 - Handle error scenarios with exponential backoff
 
@@ -183,20 +186,38 @@ type HTTPConfig struct {
 - Request timeout and retry logic
 - Metrics collection for API latency
 
-### Transformer Component
+### Hook Executor Component
 
 **Interface:**
 ```go
-type Transformer interface {
-    Transform(ctx context.Context, input []byte, expression string) ([]byte, error)
+type HookExecutor interface {
+    Execute(ctx context.Context, input []byte, hook HookSpec) ([]byte, error)
 }
 ```
 
 **Implementation Details:**
-- CEL (Common Expression Language) execution engine
-- Sandboxed execution with memory and time limits
-- Input validation and error handling
-- Support for JSON and text transformations
+- Communicates with hook-executor sidecar via HTTP
+- Validates commands against whitelist before execution
+- Supports stdin/stdout byte streaming (base64 encoded)
+- Enforces timeout and retry policies per hook
+- Passes environment variables to commands
+- Chains multiple hooks with data piping
+
+### Whitelist Manager Component
+
+**Interface:**
+```go
+type WhitelistManager interface {
+    IsAllowed(command string, args []string) bool
+    Reload() error
+}
+```
+
+**Implementation Details:**
+- Loads whitelist from YAML file at startup
+- Validates commands and arguments using regex patterns
+- Supports reload without controller restart
+- Thread-safe concurrent access
 
 ### Artifact Manager Component
 
@@ -274,14 +295,20 @@ spec:
                 type: boolean
               destinationPath:
                 type: string
-              transform:
+              maxRetries:
+                type: integer
+                default: 3
+              hooks:
                 type: object
                 properties:
-                  type:
-                    type: string
-                    enum: [cel]
-                  expression:
-                    type: string
+                  preRequest:
+                    type: array
+                    items:
+                      type: object
+                  postRequest:
+                    type: array
+                    items:
+                      type: object
               generator:
                 type: object
                 required: [type]
@@ -342,7 +369,7 @@ Standard Kubernetes conditions following the Flux pattern:
 
 - **Ready**: Overall health of the ExternalSource
 - **Fetching**: Currently fetching data from external source
-- **Transforming**: Currently applying transformations
+- **ExecutingHooks**: Currently executing pre-request or post-request hooks
 - **Storing**: Currently storing artifact
 - **Stalled**: Reconciliation has been stalled due to errors
 
@@ -370,9 +397,9 @@ type ArtifactMetadata struct {
    - Strategy: Update status condition, no retry until spec changes
    - User action required to resolve
 
-3. **Transformation Errors**: Invalid CEL expressions, runtime errors
-   - Strategy: Update status condition with detailed error message
-   - Retry on spec changes only
+3. **Hook Execution Errors**: Command failures, timeout, whitelist violations
+   - Strategy: Apply per-hook retry policy (ignore, retry, fail)
+   - Respect aggregate maxRetries limit across all hooks
 
 4. **Storage Errors**: Backend unavailability, permission issues
    - Strategy: Exponential backoff for transient issues
@@ -392,7 +419,8 @@ type ArtifactMetadata struct {
 **Coverage Areas:**
 - Reconciler logic with mocked dependencies
 - HTTP client with various response scenarios
-- Transformer with valid and invalid CEL expressions
+- Hook executor with command execution and retry policies
+- Whitelist manager with validation logic
 - Artifact manager packaging and cleanup logic
 - Storage backend implementations
 

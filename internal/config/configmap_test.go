@@ -66,9 +66,10 @@ func TestConfigMapLoader_LoadConfig(t *testing.T) {
 					"retry.maxDelay":     "10m",
 					"retry.jitterFactor": "0.5",
 
-					// Transform configuration
-					"transform.timeout":     "45s",
-					"transform.memoryLimit": "134217728",
+					// Hooks configuration
+					"hooks.whitelistPath":   "/custom/whitelist.yaml",
+					"hooks.sidecarEndpoint": "http://localhost:9090",
+					"hooks.defaultTimeout":  "45s",
 
 					// Metrics configuration
 					"metrics.enabled":  "false",
@@ -98,9 +99,10 @@ func TestConfigMapLoader_LoadConfig(t *testing.T) {
 				assert.Equal(t, 10*time.Minute, config.Retry.MaxDelay)
 				assert.Equal(t, 0.5, config.Retry.JitterFactor)
 
-				// Validate transform config
-				assert.Equal(t, 45*time.Second, config.Transform.Timeout)
-				assert.Equal(t, int64(134217728), config.Transform.MemoryLimit)
+				// Validate hooks config
+				assert.Equal(t, "/custom/whitelist.yaml", config.Hooks.WhitelistPath)
+				assert.Equal(t, "http://localhost:9090", config.Hooks.SidecarEndpoint)
+				assert.Equal(t, 45*time.Second, config.Hooks.DefaultTimeout)
 
 				// Validate metrics config
 				assert.False(t, config.Metrics.Enabled)
@@ -140,11 +142,11 @@ func TestConfigMapLoader_LoadConfig(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Data: map[string]string{
-					"http.timeout":          "invalid-duration",
-					"http.maxIdleConns":     "not-a-number",
-					"storage.s3.useSSL":     "maybe",
-					"retry.jitterFactor":    "not-a-float",
-					"transform.memoryLimit": "not-a-number",
+					"http.timeout":         "invalid-duration",
+					"http.maxIdleConns":    "not-a-number",
+					"storage.s3.useSSL":    "maybe",
+					"retry.jitterFactor":   "not-a-float",
+					"hooks.defaultTimeout": "not-a-duration",
 				},
 			},
 			validateConfig: func(t *testing.T, config *Config) {
@@ -153,7 +155,7 @@ func TestConfigMapLoader_LoadConfig(t *testing.T) {
 				assert.Equal(t, 100, config.HTTP.MaxIdleConns)
 				assert.True(t, config.Storage.S3.UseSSL)
 				assert.Equal(t, 0.25, config.Retry.JitterFactor)
-				assert.Equal(t, int64(64*1024*1024), config.Transform.MemoryLimit)
+				assert.Equal(t, 30*time.Second, config.Hooks.DefaultTimeout)
 			},
 		},
 		{
@@ -284,19 +286,21 @@ func TestConfigMapLoader_LoadRetryConfig(t *testing.T) {
 	assert.Equal(t, 0.3, config.Retry.JitterFactor)
 }
 
-func TestConfigMapLoader_LoadTransformConfig(t *testing.T) {
+func TestConfigMapLoader_LoadHooksConfig(t *testing.T) {
 	loader := &ConfigMapLoader{}
 	config := DefaultConfig()
 
 	data := map[string]string{
-		"transform.timeout":     "60s",
-		"transform.memoryLimit": "268435456", // 256MB
+		"hooks.whitelistPath":   "/custom/whitelist.yaml",
+		"hooks.sidecarEndpoint": "http://localhost:9090",
+		"hooks.defaultTimeout":  "60s",
 	}
 
-	loader.loadTransformConfig(data, config)
+	loader.loadHooksConfig(data, config)
 
-	assert.Equal(t, 60*time.Second, config.Transform.Timeout)
-	assert.Equal(t, int64(268435456), config.Transform.MemoryLimit)
+	assert.Equal(t, "/custom/whitelist.yaml", config.Hooks.WhitelistPath)
+	assert.Equal(t, "http://localhost:9090", config.Hooks.SidecarEndpoint)
+	assert.Equal(t, 60*time.Second, config.Hooks.DefaultTimeout)
 }
 
 func TestConfigMapLoader_LoadMetricsConfig(t *testing.T) {

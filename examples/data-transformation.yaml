@@ -1,11 +1,11 @@
 # Data Transformation Example
 #
-# This example demonstrates how to use CEL (Common Expression Language)
+# This example demonstrates how to use hooks with jq and other commands
 # to transform API responses before packaging them as artifacts.
 #
 # Expected behavior:
 # - Fetches raw data from an API
-# - Applies CEL transformation to restructure the data
+# - Applies hook transformations to restructure the data
 # - Packages the transformed data as a Kubernetes ConfigMap
 #
 # Usage:
@@ -23,6 +23,7 @@ metadata:
 spec:
   # Check for updates every 10 minutes
   interval: 10m
+  maxRetries: 3
   
   # Place the transformed data at this path within the artifact
   destinationPath: configmap.yaml
@@ -35,24 +36,38 @@ spec:
       url: https://api.example.com/app/settings
       method: GET
   
-  # CEL transformation to convert API response to ConfigMap
-  transform:
-    type: cel
-    expression: |
-      {
-        "apiVersion": "v1",
-        "kind": "ConfigMap",
-        "metadata": {
-          "name": "app-settings",
-          "namespace": "default"
-        },
-        "data": {
-          "database_url": data.database.url,
-          "redis_url": data.cache.redis_url,
-          "log_level": data.logging.level,
-          "feature_flags": string(data.features)
-        }
-      }
+  # Post-request hooks to transform the response
+  hooks:
+    postRequest:
+      # Step 1: Extract relevant fields and create ConfigMap structure
+      - name: create-configmap
+        command: jq
+        args:
+          - |
+            {
+              "apiVersion": "v1",
+              "kind": "ConfigMap",
+              "metadata": {
+                "name": "app-settings",
+                "namespace": "default"
+              },
+              "data": {
+                "database_url": .database.url,
+                "redis_url": .cache.redis_url,
+                "log_level": .logging.level,
+                "feature_flags": (.features | tostring)
+              }
+            }
+        timeout: "10s"
+        retryPolicy: fail
+      
+      # Step 2: Convert to YAML format
+      - name: to-yaml
+        command: yq
+        args:
+          - "-P"
+        timeout: "5s"
+        retryPolicy: retry
 
 ---
 # Example 2: Extract specific fields from a complex API response
@@ -66,6 +81,7 @@ metadata:
     example: field-extraction
 spec:
   interval: 15m
+  maxRetries: 5
   destinationPath: app-config.json
   
   generator:
@@ -74,21 +90,26 @@ spec:
       url: https://api.example.com/complex-config
   
   # Extract only the fields we need from a complex response
-  transform:
-    type: cel
-    expression: |
-      {
-        "environment": data.env.name,
-        "version": data.app.version,
-        "endpoints": {
-          "api": data.services.api.endpoint,
-          "database": data.services.database.connection_string
-        },
-        "limits": {
-          "max_connections": data.limits.connections,
-          "timeout": data.limits.request_timeout
-        }
-      }
+  hooks:
+    postRequest:
+      - name: extract-fields
+        command: jq
+        args:
+          - |
+            {
+              "environment": .env.name,
+              "version": .app.version,
+              "endpoints": {
+                "api": .services.api.endpoint,
+                "database": .services.database.connection_string
+              },
+              "limits": {
+                "max_connections": .limits.connections,
+                "timeout": .limits.request_timeout
+              }
+            }
+        timeout: "10s"
+        retryPolicy: retry
 
 ---
 # Example 3: Conditional transformation based on data content
@@ -102,6 +123,7 @@ metadata:
     example: conditional-transformation
 spec:
   interval: 20m
+  maxRetries: 3
   destinationPath: environment-config.yaml
   
   generator:
@@ -110,29 +132,43 @@ spec:
       url: https://config-api.example.com/environment/production
   
   # Apply different transformations based on environment
-  transform:
-    type: cel
-    expression: |
-      data.environment == "production" ? 
-      {
-        "apiVersion": "v1",
-        "kind": "Secret",
-        "metadata": {"name": "prod-config"},
-        "type": "Opaque",
-        "data": {
-          "database_url": base64.encode(data.database_url),
-          "api_key": base64.encode(data.api_key)
-        }
-      } : 
-      {
-        "apiVersion": "v1",
-        "kind": "ConfigMap",
-        "metadata": {"name": "dev-config"},
-        "data": {
-          "database_url": data.database_url,
-          "debug": "true"
-        }
-      }
+  hooks:
+    postRequest:
+      - name: conditional-transform
+        command: jq
+        args:
+          - |
+            if .environment == "production" then
+              {
+                "apiVersion": "v1",
+                "kind": "Secret",
+                "metadata": {"name": "prod-config"},
+                "type": "Opaque",
+                "data": {
+                  "database_url": (.database_url | @base64),
+                  "api_key": (.api_key | @base64)
+                }
+              }
+            else
+              {
+                "apiVersion": "v1",
+                "kind": "ConfigMap",
+                "metadata": {"name": "dev-config"},
+                "data": {
+                  "database_url": .database_url,
+                  "debug": "true"
+                }
+              }
+            end
+        timeout: "15s"
+        retryPolicy: fail
+      
+      - name: to-yaml
+        command: yq
+        args:
+          - "-P"
+        timeout: "5s"
+        retryPolicy: retry
 
 ---
 # Example 4: Array processing and filtering
@@ -146,6 +182,7 @@ metadata:
     example: array-processing
 spec:
   interval: 5m
+  maxRetries: 3
   destinationPath: services.yaml
   
   generator:
@@ -154,42 +191,63 @@ spec:
       url: https://service-registry.example.com/services
   
   # Filter and transform an array of services
-  transform:
-    type: cel
-    expression: |
-      {
-        "apiVersion": "v1",
-        "kind": "ConfigMap",
-        "metadata": {"name": "service-endpoints"},
-        "data": {
-          "services.json": string({
-            "services": data.services.filter(s, s.status == "healthy").map(s, {
-              "name": s.name,
-              "endpoint": s.endpoint,
-              "port": s.port,
-              "version": s.version
-            })
-          })
-        }
-      }
+  hooks:
+    postRequest:
+      # Step 1: Filter healthy services and transform
+      - name: filter-and-transform
+        command: jq
+        args:
+          - |
+            {
+              "apiVersion": "v1",
+              "kind": "ConfigMap",
+              "metadata": {"name": "service-endpoints"},
+              "data": {
+                "services.json": (
+                  .services 
+                  | map(select(.status == "healthy"))
+                  | map({
+                      name: .name,
+                      endpoint: .endpoint,
+                      port: .port,
+                      version: .version
+                    })
+                  | tostring
+                )
+              }
+            }
+        timeout: "15s"
+        retryPolicy: retry
+      
+      # Step 2: Convert to YAML
+      - name: to-yaml
+        command: yq
+        args:
+          - "-P"
+        timeout: "5s"
+        retryPolicy: retry
 
 ---
-# CEL Transformation Reference:
+# Hook Transformation Reference:
 #
-# Available variables:
-# - data: The parsed JSON response from the HTTP source
+# Common jq functions:
+# - .field: Access object field
+# - .array[]: Iterate array elements
+# - select(condition): Filter elements
+# - map(expression): Transform array elements
+# - @base64: Base64 encode string
+# - tostring: Convert to string
+# - if/then/else/end: Conditional logic
 #
-# Common CEL functions:
-# - has(data.field): Check if field exists
-# - string(value): Convert to string
-# - base64.encode(string): Base64 encode a string
-# - size(array): Get array length
-# - array.filter(item, condition): Filter array elements
-# - array.map(item, expression): Transform array elements
+# Retry policies:
+# - fail: Stop on error (default)
+# - retry: Retry on error up to maxRetries
+# - ignore: Continue on error
 #
 # Troubleshooting transformations:
 # 1. Check the raw API response format
-# 2. Test CEL expressions incrementally
+# 2. Test jq expressions independently
 # 3. Use simple expressions first, then add complexity
-# 4. Check ExternalSource status for transformation errors
+# 4. Check ExternalSource status for hook errors
 # 5. Review controller logs for detailed error messages
+# 6. Verify commands are in the whitelist ConfigMap

@@ -389,9 +389,6 @@ make run
 # Unit tests
 make test
 
-# Integration tests
-make test-integration
-
 # End-to-end tests
 make test-e2e
 ```

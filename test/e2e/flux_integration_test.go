@@ -26,7 +26,6 @@ SOFTWARE.
 package e2e
 
 import (
-	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -88,6 +87,11 @@ metadata:
   labels:
     app: config-server
 spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: server
     image: nginx:alpine
@@ -96,10 +100,24 @@ spec:
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: run
+      mountPath: /var/run
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
   volumes:
   - name: config
     configMap:
       name: config-server-data
+  - name: cache
+    emptyDir: {}
+  - name: run
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -188,7 +206,7 @@ spec:
 				cmd := exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "yaml")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
-				
+
 				// Verify it has the required fields that Flux controllers expect
 				g.Expect(output).To(ContainSubstring("spec:"))
 				g.Expect(output).To(ContainSubstring("url:"))
@@ -232,7 +250,7 @@ data:
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).NotTo(BeEmpty())
-				
+
 				// Store the new revision for comparison
 				if newRevision == "" {
 					newRevision = output
@@ -279,6 +297,11 @@ metadata:
   labels:
     app: test-server1
 spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: server
     image: nginx:alpine
@@ -287,10 +310,24 @@ spec:
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: run
+      mountPath: /var/run
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
   volumes:
   - name: config
     configMap:
       name: server1-data
+  - name: cache
+    emptyDir: {}
+  - name: run
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: Pod
@@ -300,6 +337,11 @@ metadata:
   labels:
     app: test-server2
 spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: server
     image: nginx:alpine
@@ -308,10 +350,24 @@ spec:
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: run
+      mountPath: /var/run
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
   volumes:
   - name: config
     configMap:
       name: server2-data
+  - name: cache
+    emptyDir: {}
+  - name: run
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

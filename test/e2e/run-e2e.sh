@@ -100,38 +100,43 @@ build_controller_image() {
     log "Building controller image: $CONTROLLER_IMAGE"
     
     # Build the controller binary
-    make build
+    if ! make build; then
+        error "Failed to build controller binary"
+        return 1
+    fi
     
     # Build Docker image
-    docker build -t "$CONTROLLER_IMAGE" .
+    if ! docker build -t "$CONTROLLER_IMAGE" .; then
+        error "Failed to build Docker image"
+        return 1
+    fi
     
-    # Load image into kind cluster
-    log "Loading image into kind cluster..."
-    "$KIND_BINARY" load docker-image "$CONTROLLER_IMAGE" --name "$KIND_CLUSTER"
+    # Build hook-executor image
+    log "Building hook-executor image..."
+    if ! docker build -t ghcr.io/oddkinco/hook-executor:latest -f cmd/hook-executor/Dockerfile .; then
+        error "Failed to build hook-executor image"
+        return 1
+    fi
     
-    log "Controller image built successfully"
+    # Load images into kind cluster
+    log "Loading images into kind cluster..."
+    if ! "$KIND_BINARY" load docker-image "$CONTROLLER_IMAGE" --name "$KIND_CLUSTER"; then
+        error "Failed to load controller image into Kind cluster"
+        return 1
+    fi
+    
+    if ! "$KIND_BINARY" load docker-image ghcr.io/oddkinco/hook-executor:latest --name "$KIND_CLUSTER"; then
+        error "Failed to load hook-executor image into Kind cluster"
+        return 1
+    fi
+    
+    log "Controller and hook-executor images built successfully"
 }
 
 # Setup test environment
 setup_test_environment() {
-    log "Setting up test environment..."
-    
-    # Create namespace if it doesn't exist
-    kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-    
-    # Install CRDs
-    log "Installing CRDs..."
-    make install
-    
-    # Deploy controller with test image
-    log "Deploying controller..."
-    make deploy IMG="$CONTROLLER_IMAGE"
-    
-    # Wait for controller to be ready
-    log "Waiting for controller to be ready..."
-    kubectl wait --for=condition=available --timeout=300s deployment/controller-manager -n "$NAMESPACE"
-    
-    log "Test environment setup complete"
+    log "Test environment ready - images loaded into Kind cluster"
+    log "Ginkgo tests will handle namespace creation, CRD installation, and controller deployment"
 }
 
 # Run e2e tests
@@ -176,21 +181,63 @@ main() {
     TEST_RESULT=0
     
     # Trap to ensure cleanup on exit
-    trap 'cleanup_test_environment; cleanup_kind_cluster; exit $TEST_RESULT' EXIT
+    trap 'cleanup_on_exit' EXIT
     
     check_prerequisites
-    setup_kind_cluster
-    build_controller_image
-    setup_test_environment
+    
+    if ! setup_kind_cluster; then
+        error "=========================================="
+        error "CLUSTER SETUP FAILED"
+        error "=========================================="
+        TEST_RESULT=1
+        return
+    fi
+    
+    if ! build_controller_image; then
+        error "=========================================="
+        error "IMAGE BUILD FAILED"
+        error "=========================================="
+        TEST_RESULT=1
+        return
+    fi
+    
+    # Setup environment with error handling
+    if ! setup_test_environment; then
+        error "=========================================="
+        error "SETUP FAILED - E2E tests cannot continue"
+        error "=========================================="
+        TEST_RESULT=1
+        return
+    fi
     
     # Run tests and capture result
     if run_e2e_tests; then
+        log "=========================================="
         log "All E2E tests passed successfully!"
+        log "=========================================="
         TEST_RESULT=0
     else
-        error "E2E tests failed!"
+        error "=========================================="
+        error "E2E TESTS FAILED"
+        error "=========================================="
         TEST_RESULT=1
     fi
+}
+
+# Cleanup on exit handler
+cleanup_on_exit() {
+    EXIT_CODE=$?
+    
+    if [ $TEST_RESULT -ne 0 ] || [ $EXIT_CODE -ne 0 ]; then
+        error "=========================================="
+        error "E2E TEST RUN FAILED (exit code: $EXIT_CODE)"
+        error "=========================================="
+    fi
+    
+    cleanup_test_environment
+    cleanup_kind_cluster
+    
+    exit $TEST_RESULT
 }
 
 # Handle command line arguments

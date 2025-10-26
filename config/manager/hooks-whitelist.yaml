@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hook-whitelist
+  namespace: system
+data:
+  whitelist.yaml: |
+    # Whitelist Configuration for Hook Executor
+    #
+    # This file defines which commands are allowed to be executed by hooks
+    # and optionally restricts the arguments that can be passed to them.
+
+    commands:
+      # jq - JSON processor
+      jq:
+        allowed: true
+        argumentPatterns:
+          - "^\\..*"           # Allow field selectors starting with .
+          - "^-[a-zA-Z]$"      # Allow single-letter flags like -r, -c
+          - "^--[a-z-]+$"      # Allow long flags like --raw-output
+
+      # yq - YAML processor
+      yq:
+        allowed: true
+        argumentPatterns:
+          - "^\\..*"           # Allow field selectors
+          - "^-[a-zA-Z]$"      # Allow single-letter flags
+          - "^--[a-z-]+$"      # Allow long flags
+
+      # curl - HTTP client
+      curl:
+        allowed: true
+        argumentPatterns:
+          - "^https?://.*"     # Allow HTTP/HTTPS URLs
+          - "^-[a-zA-Z]$"      # Allow single-letter flags
+          - "^--[a-z-]+$"      # Allow long flags
+
+      # bash - Shell for simple scripts
+      bash:
+        allowed: true
+        argumentPatterns:
+          - "^-c$"             # Only allow -c flag for inline scripts
+          - "^[^;&|<>]+$"      # Disallow shell operators in arguments
+
+      # grep - Search tool
+      grep:
+        allowed: true
+        argumentPatterns:
+          - "^-[a-zA-Z]+$"     # Allow flags
+          - "^[^;&|<>]+$"      # Disallow shell operators
+
+      # sed - Stream editor
+      sed:
+        allowed: true
+        argumentPatterns:
+          - "^-[a-zA-Z]$"      # Allow flags
+          - "^s/.*"            # Allow substitution commands
+
+      # awk - Text processing
+      awk:
+        allowed: true
+        argumentPatterns:
+          - "^-[a-zA-Z]$"      # Allow flags
+          - "^\\{.*\\}$"       # Allow awk scripts in braces
+          - "^[^;&|<>]+$"      # Disallow shell operators
+
+      # Dangerous commands - explicitly disallowed
+      rm:
+        allowed: false
+
+      dd:
+        allowed: false
+
+      mkfs:
+        allowed: false
+
+      shutdown:
+        allowed: false
+
+      reboot:
+        allowed: false
+

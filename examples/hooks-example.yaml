@@ -1,0 +1,134 @@
+apiVersion: source.flux.oddkin.co/v1alpha1
+kind: ExternalSource
+metadata:
+  name: hooks-example
+  namespace: default
+spec:
+  interval: 5m
+  maxRetries: 5
+  
+  generator:
+    type: http
+    http:
+      url: https://api.github.com/repos/kubernetes/kubernetes/releases/latest
+  
+  hooks:
+    # Post-request hooks process the response data
+    postRequest:
+      # Extract specific fields using jq
+      - name: extract-version
+        command: jq
+        args:
+          - ".tag_name"
+          - "-r"
+        timeout: "10s"
+        retryPolicy: retry
+      
+      # Transform the output
+      - name: format-output
+        command: bash
+        args:
+          - "-c"
+          - "echo \"Kubernetes Latest Version: $(cat)\""
+        timeout: "5s"
+        retryPolicy: fail
+        env:
+          - name: LANG
+            value: "en_US.UTF-8"
+  
+  destinationPath: kubernetes-version.txt
+---
+apiVersion: source.flux.oddkin.co/v1alpha1
+kind: ExternalSource
+metadata:
+  name: validation-hook-example
+  namespace: default
+spec:
+  interval: 10m
+  maxRetries: 3
+  
+  generator:
+    type: http
+    http:
+      url: https://api.example.com/config.json
+      headersSecretRef:
+        name: api-credentials
+  
+  hooks:
+    postRequest:
+      # Validate JSON structure
+      - name: validate-json
+        command: jq
+        args:
+          - "."
+        timeout: "5s"
+        retryPolicy: fail
+      
+      # Extract specific configuration
+      - name: extract-config
+        command: jq
+        args:
+          - ".config.settings"
+        timeout: "5s"
+        retryPolicy: retry
+      
+      # Convert to YAML
+      - name: convert-to-yaml
+        command: yq
+        args:
+          - "-P"
+        timeout: "5s"
+        retryPolicy: ignore  # Ignore if conversion fails, keep JSON
+  
+  destinationPath: config/settings.yaml
+---
+apiVersion: source.flux.oddkin.co/v1alpha1
+kind: ExternalSource
+metadata:
+  name: multi-step-processing
+  namespace: default
+spec:
+  interval: 15m
+  maxRetries: 10
+  
+  generator:
+    type: http
+    http:
+      url: https://api.example.com/data/export
+  
+  hooks:
+    postRequest:
+      # Step 1: Validate and parse JSON
+      - name: parse-json
+        command: jq
+        args:
+          - "."
+        timeout: "10s"
+        retryPolicy: fail
+      
+      # Step 2: Filter data
+      - name: filter-data
+        command: jq
+        args:
+          - ".items[] | select(.status == \"active\")"
+        timeout: "15s"
+        retryPolicy: retry
+      
+      # Step 3: Transform structure
+      - name: transform-structure
+        command: jq
+        args:
+          - "{name: .name, id: .id, metadata: .metadata}"
+        timeout: "10s"
+        retryPolicy: retry
+      
+      # Step 4: Format output
+      - name: format-output
+        command: jq
+        args:
+          - "-c"
+        timeout: "5s"
+        retryPolicy: ignore
+  
+  destinationPath: data/filtered-items.json
+

@@ -106,30 +106,129 @@ spec:
                 required:
                 - type
                 type: object
+              hooks:
+                description: Hooks specifies optional pre-request and post-request
+                  command hooks
+                properties:
+                  postRequest:
+                    description: PostRequest hooks are executed after the HTTP request
+                    items:
+                      description: HookSpec defines a single hook configuration
+                      properties:
+                        args:
+                          description: Args are the arguments to pass to the command
+                          items:
+                            type: string
+                          type: array
+                        command:
+                          description: Command is the executable to run (must be in
+                            the whitelist)
+                          type: string
+                        env:
+                          description: Env specifies environment variables for the
+                            hook
+                          items:
+                            description: EnvVar represents an environment variable
+                            properties:
+                              name:
+                                description: Name of the environment variable
+                                type: string
+                              value:
+                                description: Value of the environment variable
+                                type: string
+                            required:
+                            - name
+                            - value
+                            type: object
+                          type: array
+                        name:
+                          description: Name is a unique identifier for this hook
+                          type: string
+                        retryPolicy:
+                          default: fail
+                          description: RetryPolicy specifies how to handle failures
+                          enum:
+                          - ignore
+                          - retry
+                          - fail
+                          type: string
+                        timeout:
+                          default: 30s
+                          description: Timeout specifies the maximum duration for
+                            the hook execution
+                          type: string
+                      required:
+                      - command
+                      - name
+                      type: object
+                    type: array
+                  preRequest:
+                    description: PreRequest hooks are executed before the HTTP request
+                    items:
+                      description: HookSpec defines a single hook configuration
+                      properties:
+                        args:
+                          description: Args are the arguments to pass to the command
+                          items:
+                            type: string
+                          type: array
+                        command:
+                          description: Command is the executable to run (must be in
+                            the whitelist)
+                          type: string
+                        env:
+                          description: Env specifies environment variables for the
+                            hook
+                          items:
+                            description: EnvVar represents an environment variable
+                            properties:
+                              name:
+                                description: Name of the environment variable
+                                type: string
+                              value:
+                                description: Value of the environment variable
+                                type: string
+                            required:
+                            - name
+                            - value
+                            type: object
+                          type: array
+                        name:
+                          description: Name is a unique identifier for this hook
+                          type: string
+                        retryPolicy:
+                          default: fail
+                          description: RetryPolicy specifies how to handle failures
+                          enum:
+                          - ignore
+                          - retry
+                          - fail
+                          type: string
+                        timeout:
+                          default: 30s
+                          description: Timeout specifies the maximum duration for
+                            the hook execution
+                          type: string
+                      required:
+                      - command
+                      - name
+                      type: object
+                    type: array
+                type: object
               interval:
                 description: Interval specifies the reconciliation frequency
                 minLength: 2
                 pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$
                 type: string
+              maxRetries:
+                default: 3
+                description: MaxRetries specifies the maximum number of retry attempts
+                  across all hooks and the request
+                type: integer
               suspend:
                 description: Suspend tells the controller to suspend reconciliation
                   for this ExternalSource
                 type: boolean
-              transform:
-                description: Transform specifies optional data transformation
-                properties:
-                  expression:
-                    description: Expression contains the transformation expression
-                    type: string
-                  type:
-                    description: Type specifies the transformation engine type
-                    enum:
-                    - cel
-                    type: string
-                required:
-                - expression
-                - type
-                type: object
             required:
             - generator
             - interval

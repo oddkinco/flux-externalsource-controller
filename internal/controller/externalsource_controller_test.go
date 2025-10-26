@@ -40,7 +40,7 @@ import (
 	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
 	"github.com/oddkinco/flux-externalsource-controller/internal/generator"
-	"github.com/oddkinco/flux-externalsource-controller/internal/transformer"
+	"github.com/oddkinco/flux-externalsource-controller/internal/hooks"
 )
 
 // createTestConfig creates a default configuration for testing
@@ -122,10 +122,18 @@ var _ = Describe("ExternalSource Controller", func() {
 								URL: "https://api.example.com/data",
 							},
 						},
-						Transform: &sourcev1alpha1.TransformSpec{
-							Type:       "cel",
-							Expression: "data.config",
+						Hooks: &sourcev1alpha1.HooksSpec{
+							PostRequest: []sourcev1alpha1.HookSpec{
+								{
+									Name:        "extract-config",
+									Command:     "jq",
+									Args:        []string{".config"},
+									Timeout:     "30s",
+									RetryPolicy: "fail",
+								},
+							},
 						},
+						MaxRetries:      3,
 						DestinationPath: "config/app.json",
 					},
 				}
@@ -260,7 +268,7 @@ var _ = Describe("ExternalSource Controller", func() {
 			It("should reject invalid transformation type", func() {
 				externalSource := &sourcev1alpha1.ExternalSource{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "invalid-transform-type",
+						Name:      "invalid-hook-policy",
 						Namespace: "default",
 					},
 					Spec: sourcev1alpha1.ExternalSourceSpec{
@@ -271,9 +279,15 @@ var _ = Describe("ExternalSource Controller", func() {
 								URL: "https://api.example.com/config",
 							},
 						},
-						Transform: &sourcev1alpha1.TransformSpec{
-							Type:       "invalid", // Not in enum
-							Expression: "data.config",
+						Hooks: &sourcev1alpha1.HooksSpec{
+							PostRequest: []sourcev1alpha1.HookSpec{
+								{
+									Name:        "invalid-hook",
+									Command:     "jq",
+									Args:        []string{".data"},
+									RetryPolicy: "invalid", // Not in enum
+								},
+							},
 						},
 					},
 				}
@@ -315,7 +329,7 @@ var _ = Describe("ExternalSource Controller", func() {
 
 			By("reconciling the created resource")
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			// Register mock HTTP generator
@@ -328,7 +342,7 @@ var _ = Describe("ExternalSource Controller", func() {
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 
@@ -384,7 +398,7 @@ var _ = Describe("ExternalSource Controller", func() {
 
 			By("reconciling the suspended resource")
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			controllerReconciler := &ExternalSourceReconciler{
@@ -392,7 +406,7 @@ var _ = Describe("ExternalSource Controller", func() {
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 
@@ -502,19 +516,19 @@ func (m *MockGeneratorFactory) SupportedTypes() []string {
 	return supportedTypes
 }
 
-// MockTransformer implements transformer.Transformer for testing
-type MockTransformer struct {
-	TransformFunc func(ctx context.Context, input []byte, expression string) ([]byte, error)
+// MockHookExecutor implements hooks.HookExecutor for testing
+type MockHookExecutor struct {
+	ExecuteFunc func(ctx context.Context, input []byte, hook sourcev1alpha1.HookSpec) ([]byte, error)
 }
 
-// Ensure MockTransformer implements transformer.Transformer
-var _ transformer.Transformer = (*MockTransformer)(nil)
+// Ensure MockHookExecutor implements hooks.HookExecutor
+var _ hooks.HookExecutor = (*MockHookExecutor)(nil)
 
-func (m *MockTransformer) Transform(ctx context.Context, input []byte, expression string) ([]byte, error) {
-	if m.TransformFunc != nil {
-		return m.TransformFunc(ctx, input, expression)
+func (m *MockHookExecutor) Execute(ctx context.Context, input []byte, hook sourcev1alpha1.HookSpec) ([]byte, error) {
+	if m.ExecuteFunc != nil {
+		return m.ExecuteFunc(ctx, input, hook)
 	}
-	// Default transformation just returns the input
+	// Default behavior just returns the input
 	return input, nil
 }
 
@@ -557,7 +571,7 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 		var (
 			ctx                 context.Context
 			mockFactory         *MockGeneratorFactory
-			mockTransformer     *MockTransformer
+			mockHookExecutor    *MockHookExecutor
 			mockArtifactManager *MockArtifactManager
 			reconciler          *ExternalSourceReconciler
 		)
@@ -565,7 +579,7 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFactory = NewMockGeneratorFactory()
-			mockTransformer = &MockTransformer{}
+			mockHookExecutor = &MockHookExecutor{}
 			mockArtifactManager = &MockArtifactManager{}
 
 			reconciler = &ExternalSourceReconciler{
@@ -573,7 +587,7 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 
@@ -604,10 +618,18 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 							URL: "https://api.example.com/config",
 						},
 					},
-					Transform: &sourcev1alpha1.TransformSpec{
-						Type:       "cel",
-						Expression: "data.config",
+					Hooks: &sourcev1alpha1.HooksSpec{
+						PostRequest: []sourcev1alpha1.HookSpec{
+							{
+								Name:        "extract-config",
+								Command:     "jq",
+								Args:        []string{".config"},
+								Timeout:     "30s",
+								RetryPolicy: "fail",
+							},
+						},
 					},
+					MaxRetries:      3,
 					DestinationPath: "config/app.json",
 				},
 			}
@@ -772,19 +794,19 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 
-		It("should handle transformation errors", func() {
-			resourceName := "test-transform-error"
+		It("should handle hook execution errors", func() {
+			resourceName := "test-hook-error"
 			typeNamespacedName := types.NamespacedName{
 				Name:      resourceName,
 				Namespace: "default",
 			}
 
-			By("setting up mock transformer to fail")
-			mockTransformer.TransformFunc = func(ctx context.Context, input []byte, expression string) ([]byte, error) {
-				return nil, fmt.Errorf("invalid CEL expression")
+			By("setting up mock hook executor to fail")
+			mockHookExecutor.ExecuteFunc = func(ctx context.Context, input []byte, hook sourcev1alpha1.HookSpec) ([]byte, error) {
+				return nil, fmt.Errorf("hook execution failed")
 			}
 
-			By("creating an ExternalSource resource with transformation")
+			By("creating an ExternalSource resource with hooks")
 			resource := &sourcev1alpha1.ExternalSource{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      resourceName,
@@ -798,10 +820,18 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 							URL: "https://api.example.com/config",
 						},
 					},
-					Transform: &sourcev1alpha1.TransformSpec{
-						Type:       "cel",
-						Expression: "invalid.expression",
+					Hooks: &sourcev1alpha1.HooksSpec{
+						PostRequest: []sourcev1alpha1.HookSpec{
+							{
+								Name:        "failing-hook",
+								Command:     "jq",
+								Args:        []string{".invalid.path"},
+								Timeout:     "30s",
+								RetryPolicy: "fail",
+							},
+						},
 					},
+					MaxRetries: 3,
 				},
 			}
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -812,21 +842,21 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeZero())
 
-			// Second reconcile should fail during transformation
+			// Second reconcile should fail during hook execution
 			result, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			// CEL expression errors are treated as configuration errors, so no retry
+			// Hook execution errors with "fail" policy are treated as transient errors, so retry
 			Expect(result.RequeueAfter).To(BeNumerically(">=", 0))
 
-			By("verifying transformation error condition")
+			By("verifying hook execution error condition")
 			var updatedResource sourcev1alpha1.ExternalSource
 			Expect(k8sClient.Get(ctx, typeNamespacedName, &updatedResource)).To(Succeed())
 
-			transformingCondition := findCondition(updatedResource.Status.Conditions, TransformingCondition)
-			Expect(transformingCondition).NotTo(BeNil())
-			Expect(transformingCondition.Status).To(Equal(metav1.ConditionFalse))
-			Expect(transformingCondition.Reason).To(Equal(FailedReason))
-			Expect(transformingCondition.Message).To(ContainSubstring("invalid CEL expression"))
+			hooksCondition := findCondition(updatedResource.Status.Conditions, ExecutingHooksCondition)
+			Expect(hooksCondition).NotTo(BeNil())
+			Expect(hooksCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(hooksCondition.Reason).To(Equal(FailedReason))
+			Expect(hooksCondition.Message).To(ContainSubstring("hook execution failed"))
 
 			By("cleaning up the resource")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
@@ -975,7 +1005,7 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 		It("should clear progress conditions correctly", func() {
 			// Set multiple progress conditions
 			reconciler.setProgressCondition(externalSource, FetchingCondition, true, ProgressingReason, "Fetching")
-			reconciler.setProgressCondition(externalSource, TransformingCondition, true, ProgressingReason, "Transforming")
+			reconciler.setProgressCondition(externalSource, ExecutingHooksCondition, true, ProgressingReason, "Executing Hooks")
 			reconciler.setProgressCondition(externalSource, StoringCondition, true, ProgressingReason, "Storing")
 			reconciler.setReadyCondition(externalSource, metav1.ConditionTrue, SucceededReason, "Ready")
 
@@ -991,7 +1021,7 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 
 			// Progress conditions should be removed
 			Expect(findCondition(externalSource.Status.Conditions, FetchingCondition)).To(BeNil())
-			Expect(findCondition(externalSource.Status.Conditions, TransformingCondition)).To(BeNil())
+			Expect(findCondition(externalSource.Status.Conditions, ExecutingHooksCondition)).To(BeNil())
 			Expect(findCondition(externalSource.Status.Conditions, StoringCondition)).To(BeNil())
 		})
 
@@ -1063,11 +1093,11 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 
 			// Set up reconciler with required dependencies
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			reconciler.GeneratorFactory = mockFactory
-			reconciler.Transformer = mockTransformer
+			reconciler.HookExecutor = mockHookExecutor
 			reconciler.ArtifactManager = mockArtifactManager
 
 			// Register mock HTTP generator
@@ -1129,11 +1159,11 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 
 			// Set up reconciler with failing generator
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			reconciler.GeneratorFactory = mockFactory
-			reconciler.Transformer = mockTransformer
+			reconciler.HookExecutor = mockHookExecutor
 			reconciler.ArtifactManager = mockArtifactManager
 
 			// Register mock HTTP generator that fails
@@ -1190,11 +1220,11 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 
 			// Set up reconciler with required dependencies
 			mockFactory := NewMockGeneratorFactory()
-			mockTransformer := &MockTransformer{}
+			mockHookExecutor := &MockHookExecutor{}
 			mockArtifactManager := &MockArtifactManager{}
 
 			reconciler.GeneratorFactory = mockFactory
-			reconciler.Transformer = mockTransformer
+			reconciler.HookExecutor = mockHookExecutor
 			reconciler.ArtifactManager = mockArtifactManager
 
 			// Register mock HTTP generator
@@ -1245,7 +1275,7 @@ var _ = Describe("ExternalSource Controller Metrics and Status", func() {
 type MockMetricsRecorder struct {
 	RecordReconciliationCalls     []RecordReconciliationCall
 	RecordSourceRequestCalls      []RecordSourceRequestCall
-	RecordTransformationCalls     []RecordTransformationCall
+	RecordHookExecutionCalls      []RecordHookExecutionCall
 	RecordArtifactOperationCalls  []RecordArtifactOperationCall
 	IncActiveReconciliationsCalls []ActiveReconciliationCall
 	DecActiveReconciliationsCalls []ActiveReconciliationCall
@@ -1265,9 +1295,11 @@ type RecordSourceRequestCall struct {
 	Duration   time.Duration
 }
 
-type RecordTransformationCall struct {
-	Success  bool
-	Duration time.Duration
+type RecordHookExecutionCall struct {
+	HookName    string
+	RetryPolicy string
+	Success     bool
+	Duration    time.Duration
 }
 
 type RecordArtifactOperationCall struct {
@@ -1299,10 +1331,12 @@ func (m *MockMetricsRecorder) RecordSourceRequest(sourceType string, success boo
 	})
 }
 
-func (m *MockMetricsRecorder) RecordTransformation(success bool, duration time.Duration) {
-	m.RecordTransformationCalls = append(m.RecordTransformationCalls, RecordTransformationCall{
-		Success:  success,
-		Duration: duration,
+func (m *MockMetricsRecorder) RecordHookExecution(hookName, retryPolicy string, success bool, duration time.Duration) {
+	m.RecordHookExecutionCalls = append(m.RecordHookExecutionCalls, RecordHookExecutionCall{
+		HookName:    hookName,
+		RetryPolicy: retryPolicy,
+		Success:     success,
+		Duration:    duration,
 	})
 }
 
@@ -1499,7 +1533,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		var (
 			ctx                 context.Context
 			mockFactory         *MockGeneratorFactory
-			mockTransformer     *MockTransformer
+			mockHookExecutor    *MockHookExecutor
 			mockArtifactManager *MockArtifactManager
 			reconciler          *ExternalSourceReconciler
 		)
@@ -1507,7 +1541,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFactory = NewMockGeneratorFactory()
-			mockTransformer = &MockTransformer{}
+			mockHookExecutor = &MockHookExecutor{}
 			mockArtifactManager = &MockArtifactManager{}
 
 			reconciler = &ExternalSourceReconciler{
@@ -1515,7 +1549,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 
@@ -1693,7 +1727,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 				Status: sourcev1alpha1.ExternalSourceStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   TransformingCondition,
+							Type:   ExecutingHooksCondition,
 							Status: metav1.ConditionTrue,
 							Reason: ProgressingReason,
 						},
@@ -1717,7 +1751,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		var (
 			ctx                 context.Context
 			mockFactory         *MockGeneratorFactory
-			mockTransformer     *MockTransformer
+			mockHookExecutor    *MockHookExecutor
 			mockArtifactManager *MockArtifactManager
 			reconciler          *ExternalSourceReconciler
 		)
@@ -1725,7 +1759,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 		BeforeEach(func() {
 			ctx = context.Background()
 			mockFactory = NewMockGeneratorFactory()
-			mockTransformer = &MockTransformer{}
+			mockHookExecutor = &MockHookExecutor{}
 			mockArtifactManager = &MockArtifactManager{}
 
 			reconciler = &ExternalSourceReconciler{
@@ -1733,7 +1767,7 @@ var _ = Describe("ExternalSource Controller Error Handling and Resilience", func
 				Scheme:           k8sClient.Scheme(),
 				Config:           createTestConfig(),
 				GeneratorFactory: mockFactory,
-				Transformer:      mockTransformer,
+				HookExecutor:     mockHookExecutor,
 				ArtifactManager:  mockArtifactManager,
 			}
 		})
@@ -2131,12 +2165,12 @@ func TestExternalSourceReconciler_needsRecovery(t *testing.T) {
 			expected: true,
 		},
 		{
-			name: "transforming condition true - recovery needed",
+			name: "executing hooks condition true - recovery needed",
 			externalSource: &sourcev1alpha1.ExternalSource{
 				Status: sourcev1alpha1.ExternalSourceStatus{
 					Conditions: []metav1.Condition{
 						{
-							Type:   TransformingCondition,
+							Type:   ExecutingHooksCondition,
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -2168,7 +2202,7 @@ func TestExternalSourceReconciler_needsRecovery(t *testing.T) {
 							Status: metav1.ConditionTrue,
 						},
 						{
-							Type:   TransformingCondition,
+							Type:   ExecutingHooksCondition,
 							Status: metav1.ConditionTrue,
 						},
 					},
@@ -2265,8 +2299,8 @@ func TestExternalSourceReconciler_hasCondition(t *testing.T) {
 	assert.False(t, reconciler.hasCondition(externalSource, FetchingCondition, metav1.ConditionTrue))
 
 	// Test non-existing condition
-	assert.False(t, reconciler.hasCondition(externalSource, TransformingCondition, metav1.ConditionTrue))
-	assert.False(t, reconciler.hasCondition(externalSource, TransformingCondition, metav1.ConditionFalse))
+	assert.False(t, reconciler.hasCondition(externalSource, ExecutingHooksCondition, metav1.ConditionTrue))
+	assert.False(t, reconciler.hasCondition(externalSource, ExecutingHooksCondition, metav1.ConditionFalse))
 }
 
 func TestExternalSourceReconciler_getConditionMessage(t *testing.T) {
@@ -2294,7 +2328,7 @@ func TestExternalSourceReconciler_getConditionMessage(t *testing.T) {
 	assert.Equal(t, "Fetching message", reconciler.getConditionMessage(externalSource, FetchingCondition))
 
 	// Test non-existing condition
-	assert.Equal(t, "", reconciler.getConditionMessage(externalSource, TransformingCondition))
+	assert.Equal(t, "", reconciler.getConditionMessage(externalSource, ExecutingHooksCondition))
 }
 
 func TestExternalSourceReconciler_clearProgressConditions(t *testing.T) {
@@ -2312,7 +2346,7 @@ func TestExternalSourceReconciler_clearProgressConditions(t *testing.T) {
 					Status: metav1.ConditionTrue,
 				},
 				{
-					Type:   TransformingCondition,
+					Type:   ExecutingHooksCondition,
 					Status: metav1.ConditionTrue,
 				},
 				{

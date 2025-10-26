@@ -42,9 +42,9 @@ import (
 	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
 	"github.com/oddkinco/flux-externalsource-controller/internal/generator"
+	"github.com/oddkinco/flux-externalsource-controller/internal/hooks"
 	"github.com/oddkinco/flux-externalsource-controller/internal/metrics"
 	"github.com/oddkinco/flux-externalsource-controller/internal/storage"
-	"github.com/oddkinco/flux-externalsource-controller/internal/transformer"
 )
 
 // ExternalSourceReconciler reconciles a ExternalSource object
@@ -52,7 +52,7 @@ type ExternalSourceReconciler struct {
 	client.Client
 	Scheme           *runtime.Scheme
 	GeneratorFactory generator.SourceGeneratorFactory
-	Transformer      transformer.Transformer
+	HookExecutor     hooks.HookExecutor
 	ArtifactManager  artifact.ArtifactManager
 	MetricsRecorder  metrics.MetricsRecorder
 	Config           *config.Config
@@ -76,8 +76,8 @@ const (
 	// FetchingCondition indicates the source is currently being fetched
 	FetchingCondition = "Fetching"
 
-	// TransformingCondition indicates data is currently being transformed
-	TransformingCondition = "Transforming"
+	// ExecutingHooksCondition indicates hooks are currently being executed
+	ExecutingHooksCondition = "ExecutingHooks"
 
 	// StoringCondition indicates the artifact is currently being stored
 	StoringCondition = "Storing"
@@ -106,6 +106,7 @@ const (
 // +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalsources/finalizers,verbs=update
 // +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalartifacts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalartifacts/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -336,26 +337,19 @@ func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource
 
 		r.setProgressCondition(externalSource, FetchingCondition, false, SucceededReason, "Successfully fetched data")
 
-		// Transform data if transformation is specified
-		transformedData := sourceData.Data
-		if externalSource.Spec.Transform != nil {
-			r.setProgressCondition(externalSource, TransformingCondition, true, ProgressingReason, "Transforming data")
+		// Execute post-request hooks if specified
+		processedData := sourceData.Data
+		if externalSource.Spec.Hooks != nil && len(externalSource.Spec.Hooks.PostRequest) > 0 {
+			r.setProgressCondition(externalSource, ExecutingHooksCondition, true, ProgressingReason, "Executing post-request hooks")
 
-			transformStartTime := time.Now()
-			transformedData, err = r.Transformer.Transform(ctx, sourceData.Data, externalSource.Spec.Transform.Expression)
-			transformDuration := time.Since(transformStartTime)
-
-			// Record transformation metrics
-			if r.MetricsRecorder != nil {
-				r.MetricsRecorder.RecordTransformation(err == nil, transformDuration)
+			var hookErr error
+			processedData, hookErr = r.executeHooks(ctx, externalSource, processedData, externalSource.Spec.Hooks.PostRequest)
+			if hookErr != nil {
+				r.setProgressCondition(externalSource, ExecutingHooksCondition, false, FailedReason, fmt.Sprintf("Failed to execute hooks: %v", hookErr))
+				return ctrl.Result{}, fmt.Errorf("failed to execute post-request hooks: %w", hookErr)
 			}
 
-			if err != nil {
-				r.setProgressCondition(externalSource, TransformingCondition, false, FailedReason, fmt.Sprintf("Failed to transform data: %v", err))
-				return ctrl.Result{}, fmt.Errorf("failed to transform data: %w", err)
-			}
-
-			r.setProgressCondition(externalSource, TransformingCondition, false, SucceededReason, "Successfully transformed data")
+			r.setProgressCondition(externalSource, ExecutingHooksCondition, false, SucceededReason, "Successfully executed post-request hooks")
 		}
 
 		// Package and store artifact
@@ -368,7 +362,7 @@ func (r *ExternalSourceReconciler) reconcile(ctx context.Context, externalSource
 
 		// Package artifact
 		packageStartTime := time.Now()
-		packagedArtifact, err := r.ArtifactManager.Package(ctx, transformedData, destinationPath)
+		packagedArtifact, err := r.ArtifactManager.Package(ctx, processedData, destinationPath)
 		packageDuration := time.Since(packageStartTime)
 
 		// Record packaging metrics
@@ -611,7 +605,7 @@ func (r *ExternalSourceReconciler) setProgressCondition(externalSource *sourcev1
 func (r *ExternalSourceReconciler) clearProgressConditions(externalSource *sourcev1alpha1.ExternalSource) {
 	// Clear progress conditions that should not persist after reconciliation
 	apimeta.RemoveStatusCondition(&externalSource.Status.Conditions, FetchingCondition)
-	apimeta.RemoveStatusCondition(&externalSource.Status.Conditions, TransformingCondition)
+	apimeta.RemoveStatusCondition(&externalSource.Status.Conditions, ExecutingHooksCondition)
 	apimeta.RemoveStatusCondition(&externalSource.Status.Conditions, StoringCondition)
 }
 
@@ -837,10 +831,85 @@ func mapsEqual(a, b map[string]string) bool {
 	return true
 }
 
+// executeHooks executes a list of hooks on the input data
+func (r *ExternalSourceReconciler) executeHooks(ctx context.Context, externalSource *sourcev1alpha1.ExternalSource, input []byte, hookSpecs []sourcev1alpha1.HookSpec) ([]byte, error) {
+	log := logf.FromContext(ctx)
+
+	data := input
+	maxRetries := externalSource.Spec.MaxRetries
+	if maxRetries == 0 {
+		maxRetries = 3 // Default
+	}
+	totalRetries := 0
+
+	for _, hookSpec := range hookSpecs {
+		hookName := hookSpec.Name
+		retryPolicy := hookSpec.RetryPolicy
+		if retryPolicy == "" {
+			retryPolicy = "fail" // Default
+		}
+
+		log.Info("Executing hook", "name", hookName, "retryPolicy", retryPolicy)
+
+		// Execute hook with retries based on retry policy
+		var hookErr error
+		var output []byte
+		attempts := 0
+		maxAttempts := 1
+
+		if retryPolicy == "retry" {
+			maxAttempts = maxRetries - totalRetries + 1
+			if maxAttempts < 1 {
+				maxAttempts = 1
+			}
+		}
+
+		for attempts < maxAttempts {
+			hookStartTime := time.Now()
+			output, hookErr = r.HookExecutor.Execute(ctx, data, hookSpec)
+			hookDuration := time.Since(hookStartTime)
+
+			// Record hook execution metrics
+			if r.MetricsRecorder != nil {
+				r.MetricsRecorder.RecordHookExecution(hookName, retryPolicy, hookErr == nil, hookDuration)
+			}
+
+			if hookErr == nil {
+				log.Info("Hook executed successfully", "name", hookName, "attempts", attempts+1)
+				data = output
+				break
+			}
+
+			attempts++
+			totalRetries++
+
+			log.Info("Hook execution failed", "name", hookName, "attempt", attempts, "error", hookErr)
+
+			if retryPolicy == "ignore" {
+				log.Info("Hook failure ignored due to retry policy", "name", hookName)
+				break
+			}
+
+			if retryPolicy == "retry" && attempts < maxAttempts && totalRetries < maxRetries {
+				// Add a small delay between retries
+				time.Sleep(time.Second * time.Duration(attempts))
+				continue
+			}
+
+			// Either "fail" policy or max retries exceeded
+			if retryPolicy == "fail" || totalRetries >= maxRetries {
+				return nil, fmt.Errorf("hook %s failed after %d attempts: %w", hookName, attempts, hookErr)
+			}
+		}
+	}
+
+	return data, nil
+}
+
 // needsRecovery determines if the controller needs to perform recovery after restart
 func (r *ExternalSourceReconciler) needsRecovery(externalSource *sourcev1alpha1.ExternalSource) bool {
 	// Check if there are any in-progress conditions that suggest the controller was interrupted
-	inProgressConditions := []string{FetchingCondition, TransformingCondition, StoringCondition}
+	inProgressConditions := []string{FetchingCondition, ExecutingHooksCondition, StoringCondition}
 
 	for _, conditionType := range inProgressConditions {
 		if r.hasCondition(externalSource, conditionType, metav1.ConditionTrue) {
@@ -897,8 +966,19 @@ func (r *ExternalSourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.GeneratorFactory = generator.NewFactory()
 	}
 
-	if r.Transformer == nil {
-		r.Transformer = transformer.NewCELTransformerWithConfig(r.Config.Transform.Timeout, r.Config.Transform.MemoryLimit)
+	if r.HookExecutor == nil {
+		// Load whitelist manager
+		whitelistManager, err := hooks.NewFileWhitelistManager(r.Config.Hooks.WhitelistPath)
+		if err != nil {
+			return fmt.Errorf("failed to load hook whitelist: %w", err)
+		}
+
+		// Create hook executor
+		r.HookExecutor = hooks.NewSidecarExecutor(
+			r.Config.Hooks.SidecarEndpoint,
+			whitelistManager,
+			r.Config.Hooks.DefaultTimeout,
+		)
 	}
 
 	if r.ArtifactManager == nil {
