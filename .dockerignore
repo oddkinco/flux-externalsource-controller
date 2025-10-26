@@ -10,5 +10,5 @@
 !go.mod
 !go.sum
 
-# Re-include hook-executor example files
-!cmd/hook-executor/examples/
+# Re-include externalsource-hook-executor example files
+!cmd/externalsource-hook-executor/examples/

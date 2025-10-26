@@ -122,8 +122,8 @@ spec:
         - name: hook-whitelist
           mountPath: /etc/hooks
           readOnly: true
-      - name: hook-executor
-        image: ghcr.io/oddkinco/hook-executor:latest
+      - name: externalsource-hook-executor
+        image: ghcr.io/oddkinco/externalsource-hook-executor:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8082

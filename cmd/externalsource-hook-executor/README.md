@@ -1,6 +1,6 @@
-# Hook Executor
+# ExternalSource Hook Executor
 
-The hook-executor is a sidecar binary that executes whitelisted commands for the ExternalSource controller. It provides a secure HTTP API for running commands with stdin/stdout streaming and environment variable support.
+The externalsource-hook-executor is a sidecar binary that executes whitelisted commands for the ExternalSource controller. It provides a secure HTTP API for running commands with stdin/stdout streaming and environment variable support.
 
 ## Features
 
@@ -16,7 +16,7 @@ The hook-executor is a sidecar binary that executes whitelisted commands for the
 ### Running the Server
 
 ```bash
-hook-executor --port 8081 --whitelist /etc/hooks/whitelist.yaml
+externalsource-hook-executor --port 8081 --whitelist /etc/hooks/whitelist.yaml
 ```
 
 ### Command Line Options
@@ -122,16 +122,16 @@ See [examples/whitelist.yaml](examples/whitelist.yaml) for a complete example.
 
 ## Docker Image
 
-The hook-executor is available as a Docker image:
+The externalsource-hook-executor is available as a Docker image:
 
 ```
-ghcr.io/oddkinco/hook-executor:latest
+ghcr.io/oddkinco/externalsource-hook-executor:latest
 ```
 
 ### Building
 
 ```bash
-docker build -t hook-executor -f cmd/hook-executor/Dockerfile .
+docker build -t externalsource-hook-executor -f cmd/externalsource-hook-executor/Dockerfile .
 ```
 
 ### Running with Docker
@@ -139,12 +139,12 @@ docker build -t hook-executor -f cmd/hook-executor/Dockerfile .
 ```bash
 docker run -p 8081:8081 \
   -v $(pwd)/whitelist.yaml:/etc/hooks/whitelist.yaml:ro \
-  ghcr.io/oddkinco/hook-executor:latest
+  ghcr.io/oddkinco/externalsource-hook-executor:latest
 ```
 
 ## Integration with ExternalSource Controller
 
-The hook-executor runs as a sidecar container alongside the ExternalSource controller. The controller communicates with it via HTTP on localhost.
+The externalsource-hook-executor runs as a sidecar container alongside the ExternalSource controller. The controller communicates with it via HTTP on localhost.
 
 Example Kubernetes deployment:
 
@@ -162,8 +162,8 @@ spec:
         env:
         - name: HOOK_EXECUTOR_ENDPOINT
           value: "http://localhost:8081"
-      - name: hook-executor
-        image: ghcr.io/oddkinco/hook-executor:latest
+      - name: externalsource-hook-executor
+        image: ghcr.io/oddkinco/externalsource-hook-executor:latest
         ports:
         - containerPort: 8081
         volumeMounts:
@@ -185,13 +185,13 @@ spec:
 ### Building from Source
 
 ```bash
-go build -o hook-executor ./cmd/hook-executor
+go build -o externalsource-hook-executor ./cmd/externalsource-hook-executor
 ```
 
 ### Running Tests
 
 ```bash
-go test ./cmd/hook-executor/...
+go test ./cmd/externalsource-hook-executor/...
 ```
 
 ## License

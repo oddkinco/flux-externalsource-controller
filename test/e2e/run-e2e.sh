@@ -111,10 +111,10 @@ build_controller_image() {
         return 1
     fi
     
-    # Build hook-executor image
-    log "Building hook-executor image..."
-    if ! docker build -t ghcr.io/oddkinco/hook-executor:latest -f cmd/hook-executor/Dockerfile .; then
-        error "Failed to build hook-executor image"
+    # Build externalsource-hook-executor image
+    log "Building externalsource-hook-executor image..."
+    if ! docker build -t ghcr.io/oddkinco/externalsource-hook-executor:latest -f cmd/externalsource-hook-executor/Dockerfile .; then
+        error "Failed to build externalsource-hook-executor image"
         return 1
     fi
     
@@ -125,12 +125,12 @@ build_controller_image() {
         return 1
     fi
     
-    if ! "$KIND_BINARY" load docker-image ghcr.io/oddkinco/hook-executor:latest --name "$KIND_CLUSTER"; then
-        error "Failed to load hook-executor image into Kind cluster"
+    if ! "$KIND_BINARY" load docker-image ghcr.io/oddkinco/externalsource-hook-executor:latest --name "$KIND_CLUSTER"; then
+        error "Failed to load externalsource-hook-executor image into Kind cluster"
         return 1
     fi
     
-    log "Controller and hook-executor images built successfully"
+    log "Controller and externalsource-hook-executor images built successfully"
 }
 
 # Setup test environment
