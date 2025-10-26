@@ -247,6 +247,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      attestations: write
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -291,7 +292,7 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Generate artifact attestation
-      if: github.event_name != 'pull_request'
+      if: github.event_name != 'pull_request' && github.ref_type == 'tag'
       uses: actions/attest-build-provenance@v1
       with:
         subject-name: ${{ env.REGISTRY }}/${{ env.HOOK_EXECUTOR_IMAGE_NAME }}
@@ -302,8 +303,7 @@ jobs:
   validate-helm-chart:
     name: "Validate Helm Chart"
     runs-on: ubuntu-latest
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.helm-chart == 'true' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
