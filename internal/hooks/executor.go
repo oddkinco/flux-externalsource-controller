@@ -123,7 +123,9 @@ func (s *SidecarExecutor) Execute(ctx context.Context, input []byte, hook source
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request to sidecar: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Read response
 	respBody, err := io.ReadAll(resp.Body)

@@ -90,7 +90,9 @@ func TestSidecarExecutor_Execute(t *testing.T) {
 					ExitCode: 0,
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(resp)
+				if err := json.NewEncoder(w).Encode(resp); err != nil {
+					http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				}
 			},
 			wantErr:    false,
 			wantOutput: []byte("output"),
@@ -124,7 +126,9 @@ func TestSidecarExecutor_Execute(t *testing.T) {
 					ExitCode: 1,
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(resp)
+				if err := json.NewEncoder(w).Encode(resp); err != nil {
+					http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				}
 			},
 			wantErr: true,
 		},
@@ -163,7 +167,9 @@ func TestSidecarExecutor_Execute(t *testing.T) {
 					ExitCode: 0,
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(resp)
+				if err := json.NewEncoder(w).Encode(resp); err != nil {
+					http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+				}
 			},
 			wantErr:    false,
 			wantOutput: []byte("success"),
@@ -219,7 +225,9 @@ func TestSidecarExecutor_Timeout(t *testing.T) {
 			ExitCode: 0,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
 	}))
 	defer server.Close()
 
