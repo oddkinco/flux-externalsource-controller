@@ -185,7 +185,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func main() {
 	flag.Parse()
 
-	log.Printf("Starting hook-executor server on port %d", *port)
+	log.Printf("Starting externalsource-hook-executor server on port %d", *port)
 	log.Printf("Loading whitelist from %s", *whitelistPath)
 
 	// Load whitelist
