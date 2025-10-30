@@ -2,13 +2,13 @@ apiVersion: v2
 name: flux-externalsource-controller
 description: A Helm chart for ExternalSource Controller - integrates external data sources into GitOps workflows
 type: application
-version: 0.1.2
-appVersion: "0.1.2"
+version: 0.1.3
+appVersion: "0.1.3"
 home: https://github.com/oddkinco/flux-externalsource-controller
 sources:
   - https://github.com/oddkinco/flux-externalsource-controller
 maintainers:
-  - name: "Odd Kin"
+  - name: "OddKin"
     email: oddkin@oddkin.co
 keywords:
   - kubernetes
