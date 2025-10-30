@@ -3,7 +3,7 @@
 
 # Controller image configuration
 image:
-  repository: ghcr.io/oddkin/flux-externalsource-controller
+  repository: ghcr.io/oddkinco/flux-externalsource-controller
   tag: ""  # Defaults to chart appVersion
   pullPolicy: IfNotPresent
 
