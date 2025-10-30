@@ -94,9 +94,9 @@ spec:
       type: RuntimeDefault
   containers:
   - name: server
-    image: nginx:alpine
+    image: nginxinc/nginx-unprivileged:alpine
     ports:
-    - containerPort: 80
+    - containerPort: 8080
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
@@ -104,6 +104,8 @@ spec:
       mountPath: /var/cache/nginx
     - name: run
       mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -118,6 +120,8 @@ spec:
     emptyDir: {}
   - name: run
     emptyDir: {}
+  - name: tmp
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -129,7 +133,7 @@ spec:
     app: config-server
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 8080
 `
 			cmd := exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = strings.NewReader(configServerManifest)
@@ -304,9 +308,9 @@ spec:
       type: RuntimeDefault
   containers:
   - name: server
-    image: nginx:alpine
+    image: nginxinc/nginx-unprivileged:alpine
     ports:
-    - containerPort: 80
+    - containerPort: 8080
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
@@ -314,6 +318,8 @@ spec:
       mountPath: /var/cache/nginx
     - name: run
       mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -327,6 +333,8 @@ spec:
   - name: cache
     emptyDir: {}
   - name: run
+    emptyDir: {}
+  - name: tmp
     emptyDir: {}
 ---
 apiVersion: v1
@@ -344,9 +352,9 @@ spec:
       type: RuntimeDefault
   containers:
   - name: server
-    image: nginx:alpine
+    image: nginxinc/nginx-unprivileged:alpine
     ports:
-    - containerPort: 80
+    - containerPort: 8080
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
@@ -354,6 +362,8 @@ spec:
       mountPath: /var/cache/nginx
     - name: run
       mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -368,6 +378,8 @@ spec:
     emptyDir: {}
   - name: run
     emptyDir: {}
+  - name: tmp
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -379,7 +391,7 @@ spec:
     app: test-server1
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 8080
 ---
 apiVersion: v1
 kind: Service
@@ -391,7 +403,7 @@ spec:
     app: test-server2
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 8080
 `
 			cmd := exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = strings.NewReader(multiServerManifest)
