@@ -27,7 +27,7 @@ controller:
   
   # Storage backend configuration
   storage:
-    # Backend type: memory or s3
+    # Backend type: memory, s3, or pvc
     backend: memory
     
     # S3 configuration (when backend is s3)
@@ -40,6 +40,13 @@ controller:
         name: ""
         accessKeyKey: "access-key"
         secretKeyKey: "secret-key"
+    
+    # PVC configuration (when backend is pvc)
+    pvc:
+      enabled: false
+      storageClass: ""
+      size: 10Gi
+      path: "/data/artifacts"
   
   # HTTP client configuration
   http:

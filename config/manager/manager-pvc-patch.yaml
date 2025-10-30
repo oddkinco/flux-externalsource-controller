@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: controller-manager
+spec:
+  volumeClaimTemplates:
+  - metadata:
+      name: artifact-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+  template:
+    spec:
+      containers:
+      - name: manager
+        env:
+        - name: STORAGE_BACKEND
+          value: "pvc"
+        - name: PVC_STORAGE_PATH
+          value: "/data/artifacts"
+        volumeMounts:
+        - name: artifact-storage
+          mountPath: /data/artifacts
+
+
+

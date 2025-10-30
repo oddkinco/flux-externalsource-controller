@@ -268,7 +268,7 @@ func TestMemoryBackend_Clear(t *testing.T) {
 }
 
 func TestMemoryBackend_WithBaseURL(t *testing.T) {
-	baseURL := "http://flux-externalsource-controller-artifacts.flux-system.svc.cluster.local:8080"
+	baseURL := "http://externalsource-artifacts.flux-system.svc.cluster.local:8080"
 	backend := NewMemoryBackend(baseURL)
 	ctx := context.Background()
 

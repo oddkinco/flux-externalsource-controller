@@ -44,3 +44,26 @@ spec:
     {{- include "flux-externalsource-controller.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: manager
 {{- end }}
+
+{{- if or (eq .Values.controller.storage.backend "memory") (eq .Values.controller.storage.backend "pvc") }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flux-externalsource-controller.artifactHeadlessServiceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flux-externalsource-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: artifact-server
+spec:
+  clusterIP: None  # Headless service for StatefulSet
+  publishNotReadyAddresses: true
+  ports:
+  - name: artifacts
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    {{- include "flux-externalsource-controller.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+{{- end }}

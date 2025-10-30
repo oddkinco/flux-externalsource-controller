@@ -219,18 +219,61 @@ func main() {
 		metricsRecorder = metrics.NewNoOpRecorder()
 	}
 
-	// Create storage backend (shared between controller and artifact server for memory backend)
+	// Create storage backend (shared between controller and artifact server for memory/PVC backends)
 	var storageBackend storage.StorageBackend
-	if controllerConfig.Storage.Backend == "memory" {
-		// Build base URL for memory backend if artifact server is enabled
+
+	// Get pod name for pod-specific URLs (required for memory and PVC backends in StatefulSet)
+	podName := os.Getenv("POD_NAME")
+
+	switch controllerConfig.Storage.Backend {
+	case "memory":
+		// Build pod-specific base URL for memory backend if artifact server is enabled
 		var baseURL string
 		if controllerConfig.ArtifactServer.Enabled {
-			baseURL = fmt.Sprintf("http://%s.%s.svc.cluster.local:%d",
+			if podName != "" {
+				// Use pod-specific URL for StatefulSet
+				baseURL = fmt.Sprintf("http://%s.%s.%s.svc.cluster.local:%d",
+					podName,
+					controllerConfig.ArtifactServer.ServiceName,
+					controllerConfig.ArtifactServer.ServiceNamespace,
+					controllerConfig.ArtifactServer.Port)
+			} else {
+				// Fallback to service-based URL (for Deployment mode, though not recommended)
+				setupLog.Info("POD_NAME not set, using service-based URL (not recommended for production)")
+				baseURL = fmt.Sprintf("http://%s.%s.svc.cluster.local:%d",
+					controllerConfig.ArtifactServer.ServiceName,
+					controllerConfig.ArtifactServer.ServiceNamespace,
+					controllerConfig.ArtifactServer.Port)
+			}
+		}
+		storageBackend = storage.NewMemoryBackend(baseURL)
+
+	case "pvc":
+		// Build pod-specific base URL for PVC backend
+		var baseURL string
+		if controllerConfig.ArtifactServer.Enabled {
+			if podName == "" {
+				setupLog.Error(fmt.Errorf("POD_NAME environment variable is required for PVC backend"), "missing required configuration")
+				os.Exit(1)
+			}
+			baseURL = fmt.Sprintf("http://%s.%s.%s.svc.cluster.local:%d",
+				podName,
 				controllerConfig.ArtifactServer.ServiceName,
 				controllerConfig.ArtifactServer.ServiceNamespace,
 				controllerConfig.ArtifactServer.Port)
 		}
-		storageBackend = storage.NewMemoryBackend(baseURL)
+
+		// Create PVC backend
+		var err error
+		storageBackend, err = storage.NewPVCBackend(controllerConfig.Storage.PVC.Path, baseURL)
+		if err != nil {
+			setupLog.Error(err, "failed to create PVC storage backend",
+				"path", controllerConfig.Storage.PVC.Path)
+			os.Exit(1)
+		}
+		setupLog.Info("Using PVC storage backend",
+			"path", controllerConfig.Storage.PVC.Path,
+			"baseURL", baseURL)
 	}
 	// For S3, let controller create its own backend
 
@@ -255,12 +298,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Start artifact HTTP server if using memory backend and enabled
-	if controllerConfig.Storage.Backend == "memory" && controllerConfig.ArtifactServer.Enabled && storageBackend != nil {
-		setupLog.Info("Starting artifact HTTP server for memory backend",
+	// Start artifact HTTP server if using memory or PVC backend and enabled
+	if (controllerConfig.Storage.Backend == "memory" || controllerConfig.Storage.Backend == "pvc") &&
+		controllerConfig.ArtifactServer.Enabled && storageBackend != nil {
+		setupLog.Info("Starting artifact HTTP server",
+			"backend", controllerConfig.Storage.Backend,
 			"port", controllerConfig.ArtifactServer.Port,
 			"serviceName", controllerConfig.ArtifactServer.ServiceName,
-			"namespace", controllerConfig.ArtifactServer.ServiceNamespace)
+			"namespace", controllerConfig.ArtifactServer.ServiceNamespace,
+			"podName", podName)
 
 		// Use the shared storage backend
 		artifactServer := artifact.NewServer(storageBackend, controllerConfig.ArtifactServer.Port)

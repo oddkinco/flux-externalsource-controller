@@ -8,7 +8,7 @@ metadata:
   name: system
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: controller-manager
   namespace: system
@@ -17,6 +17,7 @@ metadata:
     app.kubernetes.io/name: flux-externalsource-controller
     app.kubernetes.io/managed-by: kustomize
 spec:
+  serviceName: artifacts
   selector:
     matchLabels:
       control-plane: controller-manager
@@ -110,8 +111,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         - name: SERVICE_NAME
-          value: "flux-externalsource-controller-artifacts"
+          value: "artifacts"
         livenessProbe:
           httpGet:
             path: /healthz
@@ -188,3 +193,17 @@ spec:
           name: hook-whitelist
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+  # Uncomment volumeClaimTemplates below to enable PVC storage backend
+  # Also set STORAGE_BACKEND=pvc and PVC_STORAGE_PATH=/data/artifacts environment variables
+  # volumeClaimTemplates:
+  # - metadata:
+  #     name: artifact-storage
+  #   spec:
+  #     accessModes: ["ReadWriteOnce"]
+  #     resources:
+  #       requests:
+  #         storage: 10Gi
+  # Then add volumeMount to manager container:
+  #     volumeMounts:
+  #     - name: artifact-storage
+  #       mountPath: /data/artifacts

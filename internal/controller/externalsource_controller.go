@@ -1010,6 +1010,20 @@ func (r *ExternalSourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 						r.Config.ArtifactServer.Port)
 				}
 				storageBackend = storage.NewMemoryBackend(baseURL)
+			case "pvc":
+				// Build base URL for PVC backend if artifact server is enabled
+				var baseURL string
+				if r.Config.ArtifactServer.Enabled {
+					baseURL = fmt.Sprintf("http://%s.%s.svc.cluster.local:%d",
+						r.Config.ArtifactServer.ServiceName,
+						r.Config.ArtifactServer.ServiceNamespace,
+						r.Config.ArtifactServer.Port)
+				}
+				var err error
+				storageBackend, err = storage.NewPVCBackend(r.Config.Storage.PVC.Path, baseURL)
+				if err != nil {
+					return fmt.Errorf("failed to create PVC storage backend: %w", err)
+				}
 			default:
 				return fmt.Errorf("unsupported storage backend: %s", r.Config.Storage.Backend)
 			}

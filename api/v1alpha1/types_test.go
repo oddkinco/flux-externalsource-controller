@@ -311,3 +311,238 @@ func TestExternalArtifactListDeepCopy(t *testing.T) {
 	assert.True(t, ok)
 	assert.Len(t, copiedObj.Items, 1)
 }
+
+func TestExternalSourceSpecDeepCopyWithNilValues(t *testing.T) {
+	original := ExternalSourceSpec{
+		Interval: "5m",
+		Generator: GeneratorSpec{
+			Type: "http",
+			HTTP: nil, // Nil HTTP spec
+		},
+		Hooks: nil, // Nil hooks
+	}
+
+	copied := original.DeepCopy()
+
+	assert.NotSame(t, &original, copied)
+	assert.Equal(t, original.Interval, copied.Interval)
+	assert.Nil(t, copied.Generator.HTTP)
+	assert.Nil(t, copied.Hooks)
+}
+
+func TestGeneratorSpecDeepCopyWithNilHTTP(t *testing.T) {
+	original := GeneratorSpec{
+		Type: "http",
+		HTTP: nil,
+	}
+
+	copied := original.DeepCopy()
+
+	assert.NotSame(t, &original, copied)
+	assert.Nil(t, copied.HTTP)
+}
+
+func TestHTTPGeneratorSpecWithSecretRefs(t *testing.T) {
+	original := HTTPGeneratorSpec{
+		URL:    "https://api.example.com",
+		Method: "GET",
+		HeadersSecretRef: &SecretReference{
+			Name: "headers-secret",
+		},
+		CABundleSecretRef: &SecretKeyReference{
+			Name: "ca-secret",
+			Key:  "ca.crt",
+		},
+	}
+
+	copied := original.DeepCopy()
+
+	assert.NotSame(t, &original, copied)
+	assert.NotSame(t, original.HeadersSecretRef, copied.HeadersSecretRef)
+	assert.Equal(t, original.HeadersSecretRef.Name, copied.HeadersSecretRef.Name)
+	assert.NotSame(t, original.CABundleSecretRef, copied.CABundleSecretRef)
+	assert.Equal(t, original.CABundleSecretRef.Key, copied.CABundleSecretRef.Key)
+}
+
+func TestHooksSpecWithEmptySlices(t *testing.T) {
+	original := HooksSpec{
+		PreRequest:  []HookSpec{},
+		PostRequest: nil,
+	}
+
+	copied := original.DeepCopy()
+
+	assert.NotSame(t, &original, copied)
+	assert.Empty(t, copied.PreRequest)
+	assert.Nil(t, copied.PostRequest)
+}
+
+func TestExternalArtifactSpecDeepCopy(t *testing.T) {
+	original := ExternalArtifactSpec{
+		URL:      "https://storage.example.com/artifact.tar.gz",
+		Revision: "abc123",
+		Metadata: map[string]string{
+			"key1": "value1",
+			"key2": "value2",
+		},
+	}
+
+	copied := original.DeepCopy()
+
+	assert.Equal(t, original.URL, copied.URL)
+	assert.Equal(t, original.Metadata, copied.Metadata)
+
+	// Modify copy to verify deep copy
+	copied.Metadata["key3"] = "value3"
+	assert.NotContains(t, original.Metadata, "key3")
+}
+
+func TestExternalSourceStatusDeepCopy(t *testing.T) {
+	now := metav1.Now()
+	original := ExternalSourceStatus{
+		ObservedGeneration: 1,
+		Conditions: []metav1.Condition{
+			{
+				Type:   "Ready",
+				Status: metav1.ConditionTrue,
+				Reason: "Synced",
+			},
+		},
+		Artifact: &ArtifactMetadata{
+			URL:            "https://example.com/artifact.tar.gz",
+			Revision:       "abc123",
+			LastUpdateTime: now,
+		},
+		LastHandledETag: "etag-123",
+	}
+
+	copied := original.DeepCopy()
+
+	assert.NotSame(t, &original, copied)
+	assert.Equal(t, original.ObservedGeneration, copied.ObservedGeneration)
+	assert.Len(t, copied.Conditions, 1)
+	assert.NotSame(t, original.Artifact, copied.Artifact)
+	assert.Equal(t, original.Artifact.URL, copied.Artifact.URL)
+	assert.Equal(t, original.LastHandledETag, copied.LastHandledETag)
+}
+
+func TestExternalSourceStatusDeepCopyWithNilArtifact(t *testing.T) {
+	original := ExternalSourceStatus{
+		ObservedGeneration: 1,
+		Artifact:           nil,
+		LastHandledETag:    "",
+	}
+
+	copied := original.DeepCopy()
+
+	assert.NotSame(t, &original, copied)
+	assert.Nil(t, copied.Artifact)
+}
+
+func TestArtifactMetadataDeepCopy(t *testing.T) {
+	now := metav1.Now()
+	original := ArtifactMetadata{
+		URL:            "https://example.com/artifact.tar.gz",
+		Revision:       "abc123",
+		LastUpdateTime: now,
+		Metadata: map[string]string{
+			"size": "1024",
+		},
+	}
+
+	copied := original.DeepCopy()
+
+	assert.Equal(t, original.URL, copied.URL)
+	assert.Equal(t, original.Metadata, copied.Metadata)
+
+	// Modify copy to verify deep copy
+	copied.Metadata["new"] = "value"
+	assert.NotContains(t, original.Metadata, "new")
+}
+
+func TestSecretKeyReferenceDeepCopy(t *testing.T) {
+	original := SecretKeyReference{
+		Name: "test-secret",
+		Key:  "data.key",
+	}
+
+	copied := original.DeepCopy()
+
+	assert.NotSame(t, &original, copied)
+	assert.Equal(t, original.Name, copied.Name)
+	assert.Equal(t, original.Key, copied.Key)
+
+	// Modify copy
+	copied.Name = "modified-secret"
+	assert.NotEqual(t, original.Name, copied.Name)
+}
+
+func TestHookSpecDeepCopy(t *testing.T) {
+	original := HookSpec{
+		Name:        "transform",
+		Command:     "jq",
+		Args:        []string{".data", "--arg", "key", "value"},
+		Timeout:     "30s",
+		RetryPolicy: "retry",
+	}
+
+	copied := original.DeepCopy()
+
+	assert.Equal(t, original.Name, copied.Name)
+	assert.Equal(t, original.Args, copied.Args)
+
+	// Modify copy to verify deep copy
+	copied.Args = append(copied.Args, "new-arg")
+	assert.NotEqual(t, len(original.Args), len(copied.Args))
+}
+
+func TestDeepCopyIntoMethods(t *testing.T) {
+	t.Run("ExternalSourceSpec DeepCopyInto", func(t *testing.T) {
+		original := ExternalSourceSpec{
+			Interval: "5m",
+			Generator: GeneratorSpec{
+				Type: "http",
+				HTTP: &HTTPGeneratorSpec{URL: "https://example.com"},
+			},
+			Hooks: &HooksSpec{
+				PostRequest: []HookSpec{{Name: "hook1"}},
+			},
+		}
+
+		var copied ExternalSourceSpec
+		original.DeepCopyInto(&copied)
+
+		assert.Equal(t, original.Interval, copied.Interval)
+		assert.NotSame(t, original.Generator.HTTP, copied.Generator.HTTP)
+		assert.NotSame(t, original.Hooks, copied.Hooks)
+	})
+
+	t.Run("GeneratorSpec DeepCopyInto", func(t *testing.T) {
+		original := GeneratorSpec{
+			Type: "http",
+			HTTP: &HTTPGeneratorSpec{URL: "https://example.com"},
+		}
+
+		var copied GeneratorSpec
+		original.DeepCopyInto(&copied)
+
+		assert.Equal(t, original.Type, copied.Type)
+		assert.NotSame(t, original.HTTP, copied.HTTP)
+	})
+
+	t.Run("HooksSpec DeepCopyInto", func(t *testing.T) {
+		original := HooksSpec{
+			PreRequest:  []HookSpec{{Name: "pre"}},
+			PostRequest: []HookSpec{{Name: "post1"}, {Name: "post2"}},
+		}
+
+		var copied HooksSpec
+		original.DeepCopyInto(&copied)
+
+		assert.Len(t, copied.PreRequest, 1)
+		assert.Len(t, copied.PostRequest, 2)
+		// Verify it's a deep copy by modifying
+		copied.PreRequest[0].Name = "modified"
+		assert.NotEqual(t, original.PreRequest[0].Name, copied.PreRequest[0].Name)
+	})
+}
