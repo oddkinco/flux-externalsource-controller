@@ -103,6 +103,33 @@ var _ = BeforeSuite(func() {
 	cmd = exec.Command("make", "install")
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
+
+	// Deploy the controller for all test suites
+	By("creating flux-system namespace")
+	cmd = exec.Command("kubectl", "create", "ns", "flux-system")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to create flux-system namespace")
+
+	By("labeling the namespace to enforce the restricted security policy")
+	cmd = exec.Command("kubectl", "label", "--overwrite", "ns", "flux-system",
+		"pod-security.kubernetes.io/enforce=restricted")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
+
+	By("deploying the controller-manager for all test suites")
+	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+
+	By("waiting for controller-manager to be running")
+	verifyControllerRunning := func(g Gomega) {
+		cmd := exec.Command("kubectl", "get", "pods", "-l", "control-plane=controller-manager",
+			"-n", "flux-system", "-o", "jsonpath={.items[0].status.phase}")
+		output, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(output).To(Equal("Running"))
+	}
+	EventuallyWithOffset(1, verifyControllerRunning).Should(Succeed())
 })
 
 var _ = AfterSuite(func() {
