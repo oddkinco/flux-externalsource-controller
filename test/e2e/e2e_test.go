@@ -41,7 +41,7 @@ import (
 )
 
 // namespace where the project is deployed in
-const namespace = "flux-externalsource-controller-system"
+const namespace = "flux-system"
 
 // serviceAccountName created for the project
 const serviceAccountName = "externalsource-controller-manager"

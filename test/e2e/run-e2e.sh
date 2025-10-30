@@ -8,7 +8,7 @@ set -euo pipefail
 # Configuration
 CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-oddkin.co/flux-externalsource-controller:v0.0.1}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-NAMESPACE="${NAMESPACE:-flux-externalsource-controller-system}"
+NAMESPACE="${NAMESPACE:-flux-system}"
 KIND_CLUSTER="${KIND_CLUSTER:-flux-externalsource-controller-e2e}"
 KIND_BINARY="${KIND:-kind}"
 

@@ -127,7 +127,7 @@ var _ = AfterSuite(func() {
 	_, _ = utils.Run(cmd)
 
 	By("removing manager namespace")
-	cmd = exec.Command("kubectl", "delete", "ns", "flux-externalsource-controller-system", "--ignore-not-found=true", "--timeout=60s")
+	cmd = exec.Command("kubectl", "delete", "ns", "flux-system", "--ignore-not-found=true", "--timeout=60s")
 	_, _ = utils.Run(cmd)
 
 	// Teardown CertManager after the suite if not skipped and if it was not already installed
