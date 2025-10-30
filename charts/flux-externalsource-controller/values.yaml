@@ -1,9 +1,13 @@
 # Default values for flux-externalsource-controller
 # This is a YAML-formatted file.
+#
+# Default namespace: flux-system
+# The chart uses .Release.Namespace by default. To deploy to flux-system:
+# helm install flux-externalsource-controller . --namespace flux-system --create-namespace
 
 # Controller image configuration
 image:
-  repository: ghcr.io/oddkin/flux-externalsource-controller
+  repository: ghcr.io/oddkinco/flux-externalsource-controller
   tag: ""  # Defaults to chart appVersion
   pullPolicy: IfNotPresent
 
@@ -45,6 +49,125 @@ controller:
   transform:
     timeout: 10s
   
+  # Hook executor configuration
+  hookExecutor:
+    # Enable hook executor sidecar
+    enabled: true
+    # Hook executor endpoint URL
+    endpoint: "http://localhost:8082"
+    # Path to whitelist file
+    whitelistPath: "/etc/hooks/whitelist.yaml"
+    # Default timeout for hook execution
+    timeout: "30s"
+    # Hook executor port
+    port: 8082
+    # Hook executor image configuration
+    image:
+      repository: ghcr.io/oddkinco/externalsource-hook-executor
+      tag: "latest"
+      pullPolicy: IfNotPresent
+    # Hook executor resource limits and requests
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 128Mi
+    # Hook executor security context for PodSecurity compliance
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      fsGroup: 65532
+      seccompProfile:
+        type: RuntimeDefault
+    # Hook executor container security context
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
+      seccompProfile:
+        type: RuntimeDefault
+    # Hook executor whitelist configuration
+    whitelist: |
+      # Whitelist Configuration for Hook Executor
+      #
+      # This file defines which commands are allowed to be executed by hooks
+      # and optionally restricts the arguments that can be passed to them.
+
+      commands:
+        # jq - JSON processor
+        jq:
+          allowed: true
+          argumentPatterns:
+            - "^\\..*"           # Allow field selectors starting with .
+            - "^-[a-zA-Z]$"      # Allow single-letter flags like -r, -c
+            - "^--[a-z-]+$"      # Allow long flags like --raw-output
+            - "(?s)^.*$"        # Allow any jq filter expression including multiline (jq filters are safe, they don't execute shell commands)
+
+        # yq - YAML processor
+        yq:
+          allowed: true
+          argumentPatterns:
+            - "^\\..*"           # Allow field selectors
+            - "^-[a-zA-Z]$"      # Allow single-letter flags
+            - "^--[a-z-]+$"      # Allow long flags
+
+        # curl - HTTP client
+        curl:
+          allowed: true
+          argumentPatterns:
+            - "^https?://.*"     # Allow HTTP/HTTPS URLs
+            - "^-[a-zA-Z]$"      # Allow single-letter flags
+            - "^--[a-z-]+$"      # Allow long flags
+
+        # bash - Shell for simple scripts
+        bash:
+          allowed: true
+          argumentPatterns:
+            - "^-c$"             # Only allow -c flag for inline scripts
+            - "^[^;&|<>]+$"      # Disallow shell operators in arguments
+
+        # grep - Search tool
+        grep:
+          allowed: true
+          argumentPatterns:
+            - "^-[a-zA-Z]+$"     # Allow flags
+            - "^[^;&|<>]+$"      # Disallow shell operators
+
+        # sed - Stream editor
+        sed:
+          allowed: true
+          argumentPatterns:
+            - "^-[a-zA-Z]$"      # Allow flags
+            - "^s/.*"            # Allow substitution commands
+
+        # awk - Text processing
+        awk:
+          allowed: true
+          argumentPatterns:
+            - "^-[a-zA-Z]$"      # Allow flags
+            - "^\\{.*\\}$"       # Allow awk scripts in braces
+            - "^[^;&|<>]+$"      # Disallow shell operators
+
+        # Dangerous commands - explicitly disallowed
+        rm:
+          allowed: false
+
+        dd:
+          allowed: false
+
+        mkfs:
+          allowed: false
+
+        shutdown:
+          allowed: false
+
+        reboot:
+          allowed: false
+  
   # Resource limits and requests
   resources:
     limits:
@@ -68,6 +191,8 @@ controller:
     runAsNonRoot: true
     runAsUser: 65532
     fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
   
   # Security context for the controller container
   containerSecurityContext:
@@ -76,6 +201,8 @@ controller:
       drop:
       - ALL
     readOnlyRootFilesystem: true
+    seccompProfile:
+      type: RuntimeDefault
   
   # Additional environment variables
   env: []

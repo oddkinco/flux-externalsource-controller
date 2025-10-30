@@ -72,6 +72,8 @@ spec:
           capabilities:
             drop:
             - "ALL"
+          seccompProfile:
+            type: RuntimeDefault
         env:
         - name: CONFIG_MAP_NAME
           value: "externalsource-controller-config"
@@ -125,6 +127,13 @@ spec:
       - name: externalsource-hook-executor
         image: ghcr.io/oddkinco/externalsource-hook-executor:latest
         imagePullPolicy: IfNotPresent
+        command:
+        - /app/externalsource-hook-executor
+        args:
+        - --port
+        - "8082"
+        - --whitelist
+        - /etc/hooks/whitelist.yaml
         ports:
         - containerPort: 8082
           name: http
@@ -135,6 +144,8 @@ spec:
           capabilities:
             drop:
             - "ALL"
+          seccompProfile:
+            type: RuntimeDefault
         livenessProbe:
           httpGet:
             path: /health

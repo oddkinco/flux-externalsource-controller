@@ -8,7 +8,7 @@ set -euo pipefail
 # Configuration
 CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-oddkin.co/flux-externalsource-controller:v0.0.1}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-NAMESPACE="${NAMESPACE:-flux-externalsource-controller-system}"
+NAMESPACE="${NAMESPACE:-flux-system}"
 KIND_CLUSTER="${KIND_CLUSTER:-flux-externalsource-controller-e2e}"
 KIND_BINARY="${KIND:-kind}"
 
@@ -99,21 +99,29 @@ cleanup_kind_cluster() {
 build_controller_image() {
     log "Building controller image: $CONTROLLER_IMAGE"
     
+    # Get the project root directory (two levels up from test/e2e if called from there)
+    if [[ "$PWD" == */test/e2e ]]; then
+        PROJECT_ROOT="$(cd ../.. && pwd)"
+    else
+        PROJECT_ROOT="$(pwd)"
+    fi
+    
     # Build the controller binary
-    if ! make build; then
+    log "Building from directory: $PROJECT_ROOT"
+    if ! (cd "$PROJECT_ROOT" && make build); then
         error "Failed to build controller binary"
         return 1
     fi
     
     # Build Docker image
-    if ! docker build -t "$CONTROLLER_IMAGE" .; then
+    if ! (cd "$PROJECT_ROOT" && docker build -t "$CONTROLLER_IMAGE" .); then
         error "Failed to build Docker image"
         return 1
     fi
     
     # Build externalsource-hook-executor image
     log "Building externalsource-hook-executor image..."
-    if ! docker build -t ghcr.io/oddkinco/externalsource-hook-executor:latest -f cmd/externalsource-hook-executor/Dockerfile .; then
+    if ! (cd "$PROJECT_ROOT" && docker build -t ghcr.io/oddkinco/externalsource-hook-executor:latest -f cmd/externalsource-hook-executor/Dockerfile .); then
         error "Failed to build externalsource-hook-executor image"
         return 1
     fi
@@ -143,29 +151,71 @@ setup_test_environment() {
 run_e2e_tests() {
     log "Running E2E tests..."
     
+    # Get the project root directory
+    if [[ "$PWD" == */test/e2e ]]; then
+        PROJECT_ROOT="$(cd ../.. && pwd)"
+    else
+        PROJECT_ROOT="$(pwd)"
+    fi
+    
     # Set environment variables for tests
     export PROJECT_IMAGE="$CONTROLLER_IMAGE"
     export KIND_CLUSTER="$KIND_CLUSTER"
     
-    # Run tests with ginkgo
-    cd test/e2e
-    ginkgo -v --tags=e2e --timeout=30m --poll-progress-after=60s --poll-progress-interval=10s .
+    # Ensure kubectl uses the Kind cluster context
+    kubectl config use-context "kind-$KIND_CLUSTER" || {
+        error "Failed to set kubectl context to kind-$KIND_CLUSTER"
+        return 1
+    }
     
-    log "E2E tests completed"
+    # Verify cluster connectivity
+    log "Verifying cluster connectivity..."
+    if ! kubectl cluster-info &> /dev/null; then
+        error "Cannot connect to Kind cluster. Is it running?"
+        kubectl config current-context || error "No kubectl context set"
+        return 1
+    fi
+    
+    log "Cluster is accessible. Current context: $(kubectl config current-context)"
+    
+    # Run tests with ginkgo from project root
+    cd "$PROJECT_ROOT/test/e2e"
+    log "Running ginkgo tests from: $PWD"
+    ginkgo -v --tags=e2e --timeout=30m --poll-progress-after=60s --poll-progress-interval=10s .
+    TEST_EXIT_CODE=$?
+    
+    # Return to project root
+    cd "$PROJECT_ROOT"
+    
+    if [ $TEST_EXIT_CODE -eq 0 ]; then
+        log "E2E tests completed successfully"
+    else
+        error "E2E tests failed with exit code: $TEST_EXIT_CODE"
+    fi
+    
+    return $TEST_EXIT_CODE
 }
 
 # Cleanup test environment
 cleanup_test_environment() {
     log "Cleaning up test environment..."
     
+    # Get the project root directory (two levels up from test/e2e)
+    PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    
+    # Set kubectl context if cluster exists
+    if "$KIND_BINARY" get clusters 2>/dev/null | grep -q "^$KIND_CLUSTER$"; then
+        kubectl config use-context "kind-$KIND_CLUSTER" || warn "Failed to set kubectl context"
+    fi
+    
     # Undeploy controller
-    make undeploy ignore-not-found=true || warn "Failed to undeploy controller"
+    (cd "$PROJECT_ROOT" && make undeploy ignore-not-found=true) || warn "Failed to undeploy controller"
     
     # Uninstall CRDs
-    make uninstall ignore-not-found=true || warn "Failed to uninstall CRDs"
+    (cd "$PROJECT_ROOT" && make uninstall ignore-not-found=true) || warn "Failed to uninstall CRDs"
     
     # Delete namespace
-    kubectl delete namespace "$NAMESPACE" --ignore-not-found=true || warn "Failed to delete namespace"
+    kubectl delete namespace "$NAMESPACE" --ignore-not-found=true --timeout=30s || warn "Failed to delete namespace"
     
     log "Test environment cleanup complete"
 }

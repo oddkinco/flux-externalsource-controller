@@ -49,7 +49,7 @@ spec:
         {{- if .Values.controller.leaderElection }}
         - --leader-elect
         {{- end }}
-        - --log-level={{ .Values.controller.logLevel }}
+        - --zap-log-level={{ .Values.controller.logLevel }}
         env:
         - name: STORAGE_BACKEND
           value: {{ .Values.controller.storage.backend }}
@@ -83,6 +83,14 @@ spec:
           value: {{ .Values.controller.http.timeout }}
         - name: TRANSFORM_TIMEOUT
           value: {{ .Values.controller.transform.timeout }}
+        {{- if .Values.controller.hookExecutor.enabled }}
+        - name: HOOK_EXECUTOR_ENDPOINT
+          value: {{ .Values.controller.hookExecutor.endpoint }}
+        - name: HOOK_WHITELIST_PATH
+          value: {{ .Values.controller.hookExecutor.whitelistPath }}
+        - name: HOOK_DEFAULT_TIMEOUT
+          value: {{ .Values.controller.hookExecutor.timeout }}
+        {{- end }}
         {{- with .Values.controller.env }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -111,12 +119,54 @@ spec:
           {{- toYaml .Values.controller.resources | nindent 10 }}
         securityContext:
           {{- toYaml .Values.controller.containerSecurityContext | nindent 10 }}
-        {{- with .Values.controller.volumeMounts }}
         volumeMounts:
+        - name: hook-whitelist
+          mountPath: /etc/hooks
+          readOnly: true
+        {{- with .Values.controller.volumeMounts }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
-      {{- with .Values.controller.volumes }}
+      {{- if .Values.controller.hookExecutor.enabled }}
+      - name: externalsource-hook-executor
+        image: "{{ .Values.controller.hookExecutor.image.repository }}:{{ .Values.controller.hookExecutor.image.tag }}"
+        imagePullPolicy: {{ .Values.controller.hookExecutor.image.pullPolicy }}
+        command:
+        - /app/externalsource-hook-executor
+        args:
+        - --port
+        - "{{ .Values.controller.hookExecutor.port }}"
+        - --whitelist
+        - {{ .Values.controller.hookExecutor.whitelistPath }}
+        ports:
+        - containerPort: {{ .Values.controller.hookExecutor.port }}
+          name: http
+          protocol: TCP
+        securityContext:
+          {{- toYaml .Values.controller.hookExecutor.containerSecurityContext | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.controller.hookExecutor.port }}
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.controller.hookExecutor.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          {{- toYaml .Values.controller.hookExecutor.resources | nindent 10 }}
+        volumeMounts:
+        - name: hook-whitelist
+          mountPath: /etc/hooks
+          readOnly: true
+      {{- end }}
       volumes:
+      - name: hook-whitelist
+        configMap:
+          name: {{ include "flux-externalsource-controller.fullname" . }}-hook-whitelist
+      {{- with .Values.controller.volumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.controller.nodeSelector }}

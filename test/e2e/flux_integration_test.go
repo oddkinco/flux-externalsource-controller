@@ -26,6 +26,7 @@ SOFTWARE.
 package e2e
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -94,9 +95,9 @@ spec:
       type: RuntimeDefault
   containers:
   - name: server
-    image: nginx:alpine
+    image: nginxinc/nginx-unprivileged:alpine
     ports:
-    - containerPort: 80
+    - containerPort: 8080
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
@@ -104,6 +105,8 @@ spec:
       mountPath: /var/cache/nginx
     - name: run
       mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -118,6 +121,8 @@ spec:
     emptyDir: {}
   - name: run
     emptyDir: {}
+  - name: tmp
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -129,7 +134,7 @@ spec:
     app: config-server
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 8080
 `
 			cmd := exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = strings.NewReader(configServerManifest)
@@ -172,8 +177,22 @@ spec:
 				// Check ExternalSource is ready
 				cmd := exec.Command("kubectl", "get", "externalsource", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
 				output, err := utils.Run(cmd)
+				if err != nil || output != "True" {
+					// Get full status for debugging
+					cmd = exec.Command("kubectl", "get", "externalsource", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.status.conditions[*]}")
+					statusOutput, _ := utils.Run(cmd)
+					if statusOutput != "" {
+						_, _ = fmt.Fprintf(GinkgoWriter, "ExternalSource status conditions: %s\n", statusOutput)
+					}
+					// Check if controller pod exists
+					cmd = exec.Command("kubectl", "get", "pods", "-l", "control-plane=controller-manager", "-n", "flux-system", "--no-headers")
+					podCheck, _ := utils.Run(cmd)
+					if podCheck == "" {
+						_, _ = fmt.Fprintf(GinkgoWriter, "Warning: Controller pod not found in flux-system namespace\n")
+					}
+				}
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("True"))
+				g.Expect(output).To(Equal("True"), "ExternalSource should be Ready")
 
 				// Check ExternalArtifact exists and has URL
 				cmd = exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.spec.url}")
@@ -304,9 +323,9 @@ spec:
       type: RuntimeDefault
   containers:
   - name: server
-    image: nginx:alpine
+    image: nginxinc/nginx-unprivileged:alpine
     ports:
-    - containerPort: 80
+    - containerPort: 8080
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
@@ -314,6 +333,8 @@ spec:
       mountPath: /var/cache/nginx
     - name: run
       mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -327,6 +348,8 @@ spec:
   - name: cache
     emptyDir: {}
   - name: run
+    emptyDir: {}
+  - name: tmp
     emptyDir: {}
 ---
 apiVersion: v1
@@ -344,9 +367,9 @@ spec:
       type: RuntimeDefault
   containers:
   - name: server
-    image: nginx:alpine
+    image: nginxinc/nginx-unprivileged:alpine
     ports:
-    - containerPort: 80
+    - containerPort: 8080
     volumeMounts:
     - name: config
       mountPath: /usr/share/nginx/html
@@ -354,6 +377,8 @@ spec:
       mountPath: /var/cache/nginx
     - name: run
       mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
@@ -368,6 +393,8 @@ spec:
     emptyDir: {}
   - name: run
     emptyDir: {}
+  - name: tmp
+    emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -379,7 +406,7 @@ spec:
     app: test-server1
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 8080
 ---
 apiVersion: v1
 kind: Service
@@ -391,7 +418,7 @@ spec:
     app: test-server2
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 8080
 `
 			cmd := exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = strings.NewReader(multiServerManifest)
