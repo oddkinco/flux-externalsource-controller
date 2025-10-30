@@ -27,6 +27,8 @@ import (
 	"testing"
 )
 
+const testArtifactKey = "artifacts/test.tar.gz"
+
 func TestMemoryBackend_Store(t *testing.T) {
 	backend := NewMemoryBackend()
 	ctx := context.Background()
@@ -262,5 +264,83 @@ func TestMemoryBackend_Clear(t *testing.T) {
 		if exists {
 			t.Errorf("key %s still exists after clear", key)
 		}
+	}
+}
+
+func TestMemoryBackend_WithBaseURL(t *testing.T) {
+	baseURL := "http://flux-externalsource-controller-artifacts.flux-system.svc.cluster.local:8080"
+	backend := NewMemoryBackend(baseURL)
+	ctx := context.Background()
+
+	key := testArtifactKey
+	data := []byte("test data")
+
+	// Store data
+	url, err := backend.Store(ctx, key, data)
+	if err != nil {
+		t.Fatalf("Store() error = %v", err)
+	}
+
+	// Verify URL uses baseURL
+	expectedURL := baseURL + "/" + key
+	if url != expectedURL {
+		t.Errorf("Store() url = %v, want %v", url, expectedURL)
+	}
+
+	// Verify GetURL also uses baseURL
+	gotURL := backend.GetURL(key)
+	if gotURL != expectedURL {
+		t.Errorf("GetURL() = %v, want %v", gotURL, expectedURL)
+	}
+}
+
+func TestMemoryBackend_WithoutBaseURL(t *testing.T) {
+	// Test backward compatibility with empty baseURL
+	backend := NewMemoryBackend()
+	ctx := context.Background()
+
+	key := testArtifactKey
+	data := []byte("test data")
+
+	// Store data
+	url, err := backend.Store(ctx, key, data)
+	if err != nil {
+		t.Fatalf("Store() error = %v", err)
+	}
+
+	// Verify URL uses memory:// scheme
+	expectedURL := "memory://localhost/" + key
+	if url != expectedURL {
+		t.Errorf("Store() url = %v, want %v", url, expectedURL)
+	}
+}
+
+func TestMemoryBackend_Retrieve(t *testing.T) {
+	backend := NewMemoryBackend()
+	ctx := context.Background()
+
+	key := testArtifactKey
+	data := []byte("test data for retrieval")
+
+	// Store data
+	_, err := backend.Store(ctx, key, data)
+	if err != nil {
+		t.Fatalf("Store() error = %v", err)
+	}
+
+	// Retrieve data
+	retrieved, err := backend.Retrieve(ctx, key)
+	if err != nil {
+		t.Fatalf("Retrieve() error = %v", err)
+	}
+
+	if string(retrieved) != string(data) {
+		t.Errorf("Retrieve() = %v, want %v", string(retrieved), string(data))
+	}
+
+	// Test retrieving non-existent key
+	_, err = backend.Retrieve(ctx, "non-existent")
+	if err == nil {
+		t.Error("Retrieve() expected error for non-existent key, got nil")
 	}
 }

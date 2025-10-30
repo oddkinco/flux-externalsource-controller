@@ -46,6 +46,9 @@ type Config struct {
 
 	// Metrics configuration
 	Metrics MetricsConfig `json:"metrics"`
+
+	// ArtifactServer configuration
+	ArtifactServer ArtifactServerConfig `json:"artifactServer"`
 }
 
 // StorageConfig holds storage backend configuration
@@ -138,6 +141,21 @@ type MetricsConfig struct {
 	Interval time.Duration `json:"interval"`
 }
 
+// ArtifactServerConfig holds artifact HTTP server configuration
+type ArtifactServerConfig struct {
+	// Enable artifact HTTP server
+	Enabled bool `json:"enabled"`
+
+	// Port for the artifact HTTP server
+	Port int `json:"port"`
+
+	// ServiceName is the Kubernetes service name for the artifact server
+	ServiceName string `json:"serviceName"`
+
+	// ServiceNamespace is the Kubernetes namespace where the service is deployed
+	ServiceNamespace string `json:"serviceNamespace"`
+}
+
 // DefaultConfig returns a configuration with sensible defaults
 func DefaultConfig() *Config {
 	return &Config{
@@ -172,6 +190,12 @@ func DefaultConfig() *Config {
 			Enabled:  true,
 			Interval: 15 * time.Second,
 		},
+		ArtifactServer: ArtifactServerConfig{
+			Enabled:          true,
+			Port:             8080,
+			ServiceName:      "flux-externalsource-controller-artifacts",
+			ServiceNamespace: "flux-system",
+		},
 	}
 }
 
@@ -182,6 +206,7 @@ func (c *Config) LoadFromEnvironment() {
 	c.loadRetryFromEnv()
 	c.loadHooksFromEnv()
 	c.loadMetricsFromEnv()
+	c.loadArtifactServerFromEnv()
 }
 
 // loadStorageFromEnv loads storage configuration from environment variables
@@ -303,6 +328,26 @@ func (c *Config) loadMetricsFromEnv() {
 	}
 }
 
+// loadArtifactServerFromEnv loads artifact server configuration from environment variables
+func (c *Config) loadArtifactServerFromEnv() {
+	if enabledStr := os.Getenv("ARTIFACT_SERVER_ENABLED"); enabledStr != "" {
+		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
+			c.ArtifactServer.Enabled = enabled
+		}
+	}
+	if portStr := os.Getenv("ARTIFACT_SERVER_PORT"); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil {
+			c.ArtifactServer.Port = port
+		}
+	}
+	if serviceName := os.Getenv("SERVICE_NAME"); serviceName != "" {
+		c.ArtifactServer.ServiceName = serviceName
+	}
+	if serviceNamespace := os.Getenv("POD_NAMESPACE"); serviceNamespace != "" {
+		c.ArtifactServer.ServiceNamespace = serviceNamespace
+	}
+}
+
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	// Validate storage configuration
@@ -373,6 +418,17 @@ func (c *Config) Validate() error {
 	// Validate metrics configuration
 	if c.Metrics.Interval <= 0 {
 		return fmt.Errorf("metrics interval must be positive")
+	}
+
+	// Validate artifact server configuration
+	if c.ArtifactServer.Port < 1 || c.ArtifactServer.Port > 65535 {
+		return fmt.Errorf("artifact server port must be between 1 and 65535")
+	}
+	if c.ArtifactServer.ServiceName == "" {
+		return fmt.Errorf("artifact server service name must be specified")
+	}
+	if c.ArtifactServer.ServiceNamespace == "" {
+		return fmt.Errorf("artifact server service namespace must be specified")
 	}
 
 	return nil

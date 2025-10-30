@@ -250,3 +250,8 @@ func (s *S3Backend) parseListResponse(body, prefix string) []string {
 
 	return keys
 }
+
+// Retrieve returns an error for S3 backend as artifacts are accessed directly from S3
+func (s *S3Backend) Retrieve(_ context.Context, _ string) ([]byte, error) {
+	return nil, fmt.Errorf("S3 artifacts are accessed directly from S3, not through the controller")
+}

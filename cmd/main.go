@@ -26,6 +26,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -43,9 +44,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
+	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
 	"github.com/oddkinco/flux-externalsource-controller/internal/controller"
 	"github.com/oddkinco/flux-externalsource-controller/internal/metrics"
+	"github.com/oddkinco/flux-externalsource-controller/internal/storage"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -70,6 +73,8 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var artifactServerPort int
+	var artifactServerEnabled bool
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -88,6 +93,10 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.IntVar(&artifactServerPort, "artifact-server-port", 8080,
+		"The port for the artifact HTTP server")
+	flag.BoolVar(&artifactServerEnabled, "artifact-server-enabled", true,
+		"Enable the artifact HTTP server (for memory backend)")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -198,6 +207,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Override artifact server config from flags if provided
+	controllerConfig.ArtifactServer.Port = artifactServerPort
+	controllerConfig.ArtifactServer.Enabled = artifactServerEnabled
+
 	// Initialize metrics recorder
 	var metricsRecorder metrics.MetricsRecorder
 	if controllerConfig.Metrics.Enabled {
@@ -206,11 +219,27 @@ func main() {
 		metricsRecorder = metrics.NewNoOpRecorder()
 	}
 
+	// Create storage backend (shared between controller and artifact server for memory backend)
+	var storageBackend storage.StorageBackend
+	if controllerConfig.Storage.Backend == "memory" {
+		// Build base URL for memory backend if artifact server is enabled
+		var baseURL string
+		if controllerConfig.ArtifactServer.Enabled {
+			baseURL = fmt.Sprintf("http://%s.%s.svc.cluster.local:%d",
+				controllerConfig.ArtifactServer.ServiceName,
+				controllerConfig.ArtifactServer.ServiceNamespace,
+				controllerConfig.ArtifactServer.Port)
+		}
+		storageBackend = storage.NewMemoryBackend(baseURL)
+	}
+	// For S3, let controller create its own backend
+
 	if err := (&controller.ExternalSourceReconciler{
 		Client:          mgr.GetClient(),
 		Scheme:          mgr.GetScheme(),
 		MetricsRecorder: metricsRecorder,
 		Config:          controllerConfig,
+		StorageBackend:  storageBackend, // Share storage backend with artifact server
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ExternalSource")
 		os.Exit(1)
@@ -224,6 +253,24 @@ func main() {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
+	}
+
+	// Start artifact HTTP server if using memory backend and enabled
+	if controllerConfig.Storage.Backend == "memory" && controllerConfig.ArtifactServer.Enabled && storageBackend != nil {
+		setupLog.Info("Starting artifact HTTP server for memory backend",
+			"port", controllerConfig.ArtifactServer.Port,
+			"serviceName", controllerConfig.ArtifactServer.ServiceName,
+			"namespace", controllerConfig.ArtifactServer.ServiceNamespace)
+
+		// Use the shared storage backend
+		artifactServer := artifact.NewServer(storageBackend, controllerConfig.ArtifactServer.Port)
+
+		// Start artifact server in goroutine
+		go func() {
+			if err := artifactServer.Start(ctx); err != nil {
+				setupLog.Error(err, "artifact HTTP server failed")
+			}
+		}()
 	}
 
 	setupLog.Info("starting manager")

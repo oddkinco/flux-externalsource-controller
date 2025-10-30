@@ -33,15 +33,22 @@ import (
 // MemoryBackend implements StorageBackend for in-memory storage
 // WARNING: This backend is non-persistent and data will be lost on controller restart
 type MemoryBackend struct {
-	data   map[string][]byte
-	mutex  sync.RWMutex
-	warned bool
+	data    map[string][]byte
+	mutex   sync.RWMutex
+	warned  bool
+	baseURL string
 }
 
 // NewMemoryBackend creates a new in-memory storage backend
-func NewMemoryBackend() *MemoryBackend {
+// If baseURL is provided, it will be used for generating artifact URLs
+// Otherwise, URLs will use the memory:// scheme
+func NewMemoryBackend(baseURL ...string) *MemoryBackend {
 	backend := &MemoryBackend{
 		data: make(map[string][]byte),
+	}
+
+	if len(baseURL) > 0 && baseURL[0] != "" {
+		backend.baseURL = baseURL[0]
 	}
 
 	// Issue warning about non-persistence
@@ -54,7 +61,7 @@ func NewMemoryBackend() *MemoryBackend {
 	return backend
 }
 
-// Store saves data in memory and returns a mock URL
+// Store saves data in memory and returns a URL
 func (m *MemoryBackend) Store(_ context.Context, key string, data []byte) (string, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -65,9 +72,8 @@ func (m *MemoryBackend) Store(_ context.Context, key string, data []byte) (strin
 
 	m.data[key] = dataCopy
 
-	// Return a mock URL for the stored object
-	url := fmt.Sprintf("memory://localhost/%s", key)
-	return url, nil
+	// Return URL based on baseURL if set, otherwise use memory:// scheme
+	return m.GetURL(key), nil
 }
 
 // List returns a list of keys with the given prefix
@@ -94,9 +100,28 @@ func (m *MemoryBackend) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-// GetURL returns the mock URL for accessing the stored object
+// GetURL returns the URL for accessing the stored object
 func (m *MemoryBackend) GetURL(key string) string {
+	if m.baseURL != "" {
+		return fmt.Sprintf("%s/%s", m.baseURL, key)
+	}
 	return fmt.Sprintf("memory://localhost/%s", key)
+}
+
+// Retrieve retrieves data from memory by key
+func (m *MemoryBackend) Retrieve(_ context.Context, key string) ([]byte, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	data, exists := m.data[key]
+	if !exists {
+		return nil, fmt.Errorf("artifact not found: %s", key)
+	}
+
+	// Return a copy to prevent external modifications
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+	return dataCopy, nil
 }
 
 // GetData returns the stored data for a key (for testing purposes)
