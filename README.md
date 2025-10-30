@@ -289,7 +289,7 @@ The controller exposes metrics at `/metrics` endpoint:
 View controller logs for detailed troubleshooting:
 
 ```bash
-kubectl logs -n flux-externalsource-controller-system deployment/flux-externalsource-controller-manager
+kubectl logs -n flux-system deployment/flux-externalsource-controller-manager
 ```
 
 ## Flux Integration
@@ -351,10 +351,10 @@ kubectl get externalsource -A
 kubectl describe externalsource <name>
 
 # Check controller logs
-kubectl logs -n flux-externalsource-controller-system deployment/flux-externalsource-controller-manager
+kubectl logs -n flux-system deployment/flux-externalsource-controller-manager
 
 # View metrics
-kubectl port-forward -n flux-externalsource-controller-system svc/flux-externalsource-controller-metrics 8080:8080
+kubectl port-forward -n flux-system svc/flux-externalsource-controller-metrics 8080:8080
 curl http://localhost:8080/metrics
 ```
 

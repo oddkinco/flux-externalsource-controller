@@ -13,27 +13,27 @@ A Helm chart for deploying the ExternalSource Controller, which integrates exter
 ### Add Helm Repository
 
 ```bash
-helm repo add flux-externalsource-controller oci://ghcr.io/oddkin/charts
+helm repo add flux-externalsource-controller oci://ghcr.io/oddkinco/charts
 helm repo update
 ```
 
 ### Install Chart
 
 ```bash
-# Install with default values
-helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller
+# Install with default values (deploys to flux-system namespace)
+helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller --namespace flux-system --create-namespace
 
 # Install in custom namespace
-helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller --namespace flux-external-system --create-namespace
+helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller --namespace <custom-namespace> --create-namespace
 
 # Install with custom values
-helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller -f values.yaml
+helm install flux-externalsource-controller flux-externalsource-controller/flux-externalsource-controller --namespace flux-system --create-namespace -f values.yaml
 ```
 
 ### Install from OCI Registry
 
 ```bash
-helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller --version 0.1.0
+helm install flux-externalsource-controller oci://ghcr.io/oddkinco/charts/flux-externalsource-controller --version 0.1.0
 ```
 
 ## Configuration
@@ -52,7 +52,7 @@ The following table lists the configurable parameters and their default values.
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Controller image repository | `ghcr.io/oddkin/flux-externalsource-controller` |
+| `image.repository` | Controller image repository | `ghcr.io/oddkinco/flux-externalsource-controller` |
 | `image.tag` | Controller image tag | `""` (uses chart appVersion) |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `imagePullSecrets` | Image pull secrets | `[]` |
@@ -107,7 +107,7 @@ The following table lists the configurable parameters and their default values.
 ### Basic Installation
 
 ```bash
-helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller
+helm install flux-externalsource-controller oci://ghcr.io/oddkinco/charts/flux-externalsource-controller --namespace flux-system --create-namespace
 ```
 
 ### Installation with S3 Storage
@@ -129,7 +129,7 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret-key=YOUR_SECRET_KEY
 
 # Install with S3 storage
-helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller -f values-s3.yaml
+helm install flux-externalsource-controller oci://ghcr.io/oddkinco/charts/flux-externalsource-controller --namespace flux-system --create-namespace -f values-s3.yaml
 ```
 
 ### Installation with Monitoring
@@ -149,7 +149,7 @@ controller:
 ```
 
 ```bash
-helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller -f values-monitoring.yaml
+helm install flux-externalsource-controller oci://ghcr.io/oddkinco/charts/flux-externalsource-controller --namespace flux-system --create-namespace -f values-monitoring.yaml
 ```
 
 ### High Availability Installation
@@ -178,7 +178,7 @@ podDisruptionBudget:
 ```
 
 ```bash
-helm install flux-externalsource-controller oci://ghcr.io/oddkin/charts/flux-externalsource-controller -f values-ha.yaml
+helm install flux-externalsource-controller oci://ghcr.io/oddkinco/charts/flux-externalsource-controller --namespace flux-system --create-namespace -f values-ha.yaml
 ```
 
 ## Upgrading
@@ -221,13 +221,13 @@ kubectl delete crd externalsources.source.flux.oddkin.co externalartifacts.sourc
 
 1. **Controller not starting:**
    ```bash
-   kubectl logs -n flux-external-system deployment/flux-externalsource-controller-manager
-   kubectl describe deployment -n flux-external-system flux-externalsource-controller-manager
+   kubectl logs -n flux-system deployment/flux-externalsource-controller-manager
+   kubectl describe deployment -n flux-system flux-externalsource-controller-manager
    ```
 
 2. **RBAC issues:**
    ```bash
-   kubectl auth can-i create externalsources --as=system:serviceaccount:flux-external-system:flux-externalsource-controller-manager
+   kubectl auth can-i create externalsources --as=system:serviceaccount:flux-system:flux-externalsource-controller-manager
    ```
 
 3. **Storage backend issues:**
