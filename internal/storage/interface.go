@@ -42,4 +42,7 @@ type StorageBackend interface {
 
 	// GetURL returns the URL for accessing the stored object
 	GetURL(key string) string
+
+	// Retrieve retrieves data from the storage backend by key
+	Retrieve(ctx context.Context, key string) ([]byte, error)
 }

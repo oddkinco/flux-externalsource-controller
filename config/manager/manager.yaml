@@ -65,7 +65,10 @@ spec:
           - --health-probe-bind-address=:8081
         image: controller:latest
         name: manager
-        ports: []
+        ports:
+        - containerPort: 8080
+          name: artifacts
+          protocol: TCP
         securityContext:
           readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
@@ -99,6 +102,16 @@ spec:
           value: "/etc/hooks/whitelist.yaml"
         - name: HOOK_DEFAULT_TIMEOUT
           value: "30s"
+        - name: ARTIFACT_SERVER_PORT
+          value: "8080"
+        - name: ARTIFACT_SERVER_ENABLED
+          value: "true"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: SERVICE_NAME
+          value: "flux-externalsource-controller-artifacts"
         livenessProbe:
           httpGet:
             path: /healthz

@@ -56,6 +56,7 @@ type ExternalSourceReconciler struct {
 	ArtifactManager  artifact.ArtifactManager
 	MetricsRecorder  metrics.MetricsRecorder
 	Config           *config.Config
+	StorageBackend   storage.StorageBackend // Optional: can be set externally to share with artifact server
 }
 
 const (
@@ -984,20 +985,36 @@ func (r *ExternalSourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.ArtifactManager == nil {
 		var storageBackend storage.StorageBackend
 
-		switch r.Config.Storage.Backend {
-		case "s3":
-			storageBackend = storage.NewS3Backend(storage.S3Config{
-				Endpoint:  r.Config.Storage.S3.Endpoint,
-				Bucket:    r.Config.Storage.S3.Bucket,
-				Region:    r.Config.Storage.S3.Region,
-				AccessKey: r.Config.Storage.S3.AccessKeyID,
-				SecretKey: r.Config.Storage.S3.SecretAccessKey,
-				UseSSL:    r.Config.Storage.S3.UseSSL,
-			})
-		case "memory":
-			storageBackend = storage.NewMemoryBackend()
-		default:
-			return fmt.Errorf("unsupported storage backend: %s", r.Config.Storage.Backend)
+		// Use externally provided storage backend if available (for sharing with artifact server)
+		if r.StorageBackend != nil {
+			storageBackend = r.StorageBackend
+		} else {
+			// Create storage backend based on configuration
+			switch r.Config.Storage.Backend {
+			case "s3":
+				storageBackend = storage.NewS3Backend(storage.S3Config{
+					Endpoint:  r.Config.Storage.S3.Endpoint,
+					Bucket:    r.Config.Storage.S3.Bucket,
+					Region:    r.Config.Storage.S3.Region,
+					AccessKey: r.Config.Storage.S3.AccessKeyID,
+					SecretKey: r.Config.Storage.S3.SecretAccessKey,
+					UseSSL:    r.Config.Storage.S3.UseSSL,
+				})
+			case "memory":
+				// Build base URL for memory backend if artifact server is enabled
+				var baseURL string
+				if r.Config.ArtifactServer.Enabled {
+					baseURL = fmt.Sprintf("http://%s.%s.svc.cluster.local:%d",
+						r.Config.ArtifactServer.ServiceName,
+						r.Config.ArtifactServer.ServiceNamespace,
+						r.Config.ArtifactServer.Port)
+				}
+				storageBackend = storage.NewMemoryBackend(baseURL)
+			default:
+				return fmt.Errorf("unsupported storage backend: %s", r.Config.Storage.Backend)
+			}
+
+			r.StorageBackend = storageBackend
 		}
 
 		r.ArtifactManager = artifact.NewManager(storageBackend)
