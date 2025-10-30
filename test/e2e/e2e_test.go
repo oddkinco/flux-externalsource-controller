@@ -116,13 +116,18 @@ var _ = Describe("Manager", Ordered, func() {
 				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get Kubernetes events: %s", err)
 			}
 
-			By("Fetching curl-metrics logs")
-			cmd = exec.Command("kubectl", "logs", "curl-metrics", "-n", namespace)
-			metricsOutput, err := utils.Run(cmd)
+			By("Fetching curl-metrics logs if pod exists")
+			// Check if curl-metrics pod exists before trying to fetch logs
+			cmd = exec.Command("kubectl", "get", "pod", "curl-metrics", "-n", namespace, "--ignore-not-found=true")
+			_, err = utils.Run(cmd)
 			if err == nil {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Metrics logs:\n %s", metricsOutput)
-			} else {
-				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get curl-metrics logs: %s", err)
+				cmd = exec.Command("kubectl", "logs", "curl-metrics", "-n", namespace)
+				metricsOutput, err := utils.Run(cmd)
+				if err == nil {
+					_, _ = fmt.Fprintf(GinkgoWriter, "Metrics logs:\n %s", metricsOutput)
+				} else {
+					_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get curl-metrics logs: %s", err)
+				}
 			}
 
 			By("Fetching controller manager pod description")
@@ -393,7 +398,7 @@ spec:
 			verifyReconciliationMetrics := func(g Gomega) {
 				metricsOutput, err := getMetricsOutput()
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(metricsOutput).To(ContainSubstring("externalsource_reconciliations_total"))
+				g.Expect(metricsOutput).To(ContainSubstring("externalsource_reconciliation_total"))
 			}
 			Eventually(verifyReconciliationMetrics).Should(Succeed())
 
@@ -531,8 +536,22 @@ spec:
 			verifyHooksSourceReady := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get", "externalsource", "test-hooks-source", "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
 				output, err := utils.Run(cmd)
+				if err != nil || output != "True" {
+					// If not ready, get full status to see what's wrong
+					cmd = exec.Command("kubectl", "get", "externalsource", "test-hooks-source", "-n", namespace, "-o", "jsonpath={.status.conditions[*]}")
+					statusOutput, _ := utils.Run(cmd)
+					if statusOutput != "" {
+						_, _ = fmt.Fprintf(GinkgoWriter, "ExternalSource status conditions: %s\n", statusOutput)
+					}
+					// Also check hook executor sidecar
+					cmd = exec.Command("kubectl", "get", "pods", "-l", "control-plane=controller-manager", "-n", namespace, "-o", "jsonpath={.items[0].spec.containers[*].name}")
+					podContainers, _ := utils.Run(cmd)
+					if podContainers != "" {
+						_, _ = fmt.Fprintf(GinkgoWriter, "Controller pod containers: %s\n", podContainers)
+					}
+				}
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("True"))
+				g.Expect(output).To(Equal("True"), "ExternalSource should be Ready")
 			}
 			Eventually(verifyHooksSourceReady, 2*time.Minute).Should(Succeed())
 
@@ -585,7 +604,7 @@ spec:
 			verifyErrorMetrics := func(g Gomega) {
 				metricsOutput, err := getMetricsOutput()
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(metricsOutput).To(ContainSubstring("externalsource_reconciliations_total"))
+				g.Expect(metricsOutput).To(ContainSubstring("externalsource_reconciliation_total"))
 			}
 			Eventually(verifyErrorMetrics).Should(Succeed())
 
@@ -648,10 +667,91 @@ func serviceAccountToken() (string, error) {
 	return out, err
 }
 
-// getMetricsOutput retrieves and returns the logs from the curl pod used to access the metrics endpoint.
+// getMetricsOutput retrieves fresh metrics by creating a temporary pod, fetching metrics, and cleaning up.
 func getMetricsOutput() (string, error) {
-	By("getting the curl-metrics logs")
-	cmd := exec.Command("kubectl", "logs", "curl-metrics", "-n", namespace)
+	By("getting fresh metrics by creating a temporary curl pod")
+
+	// Get service account token
+	token, err := serviceAccountToken()
+	if err != nil {
+		return "", fmt.Errorf("failed to get service account token: %w", err)
+	}
+
+	// Generate a unique pod name using timestamp to avoid conflicts
+	podName := fmt.Sprintf("curl-metrics-tmp-%d", time.Now().UnixNano())
+
+	// Create temporary pod to fetch metrics
+	cmd := exec.Command("kubectl", "run", podName, "--restart=Never",
+		"--namespace", namespace,
+		"--image=curlimages/curl:latest",
+		"--overrides",
+		fmt.Sprintf(`{
+			"spec": {
+				"containers": [{
+					"name": "curl",
+					"image": "curlimages/curl:latest",
+					"command": ["/bin/sh", "-c"],
+					"args": ["curl -v -k -H 'Authorization: Bearer %s' https://%s.%s.svc.cluster.local:8443/metrics"],
+					"securityContext": {
+						"readOnlyRootFilesystem": true,
+						"allowPrivilegeEscalation": false,
+						"capabilities": {
+							"drop": ["ALL"]
+						},
+						"runAsNonRoot": true,
+						"runAsUser": 1000,
+						"seccompProfile": {
+							"type": "RuntimeDefault"
+						}
+					}
+				}],
+				"serviceAccountName": "%s"
+			}
+		}`, token, metricsServiceName, namespace, serviceAccountName))
+	_, err = utils.Run(cmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary metrics pod: %w", err)
+	}
+
+	// Ensure cleanup of the temporary pod
+	defer func() {
+		cleanupCmd := exec.Command("kubectl", "delete", "pod", podName, "-n", namespace, "--ignore-not-found=true")
+		_, _ = utils.Run(cleanupCmd)
+	}()
+
+	// Wait for pod to complete
+	verifyPodComplete := func() error {
+		cmd := exec.Command("kubectl", "get", "pods", podName,
+			"-o", "jsonpath={.status.phase}",
+			"-n", namespace)
+		output, err := utils.Run(cmd)
+		if err != nil {
+			return err
+		}
+		if output != "Succeeded" {
+			return fmt.Errorf("pod status is %s, expected Succeeded", output)
+		}
+		return nil
+	}
+
+	// Wait up to 2 minutes for pod to complete
+	for i := 0; i < 120; i++ {
+		if err := verifyPodComplete(); err == nil {
+			break
+		}
+		if i == 119 {
+			// Get final pod status and logs for debugging
+			finalStatusCmd := exec.Command("kubectl", "get", "pod", podName, "-n", namespace, "-o", "jsonpath={.status.phase}")
+			finalStatus, _ := utils.Run(finalStatusCmd)
+			logsCmd := exec.Command("kubectl", "logs", podName, "-n", namespace)
+			logs, _ := utils.Run(logsCmd)
+			return "", fmt.Errorf("pod did not complete within timeout (120s). Final status: %s. Logs: %s. Last error: %w", finalStatus, logs, err)
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	// Fetch logs from the temporary pod
+	cmd = exec.Command("kubectl", "logs", podName, "-n", namespace)
 	return utils.Run(cmd)
 }
 

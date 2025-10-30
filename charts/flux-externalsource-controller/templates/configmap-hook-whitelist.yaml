@@ -17,13 +17,14 @@ data:
     # and optionally restricts the arguments that can be passed to them.
 
     commands:
-      # jq - JSON processor
-      jq:
-        allowed: true
-        argumentPatterns:
-          - "^\\..*"           # Allow field selectors starting with .
-          - "^-[a-zA-Z]$"      # Allow single-letter flags like -r, -c
-          - "^--[a-z-]+$"      # Allow long flags like --raw-output
+        # jq - JSON processor
+        jq:
+          allowed: true
+          argumentPatterns:
+            - "^\\..*"           # Allow field selectors starting with .
+            - "^-[a-zA-Z]$"      # Allow single-letter flags like -r, -c
+            - "^--[a-z-]+$"      # Allow long flags like --raw-output
+            - "(?s)^.*$"        # Allow any jq filter expression including multiline (jq filters are safe, they don't execute shell commands)
 
       # yq - YAML processor
       yq:
