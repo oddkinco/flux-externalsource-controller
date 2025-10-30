@@ -2,17 +2,49 @@
 
 ## Overview
 
-The HTTP Artifact Server enables the ExternalSource controller to serve artifacts stored in the memory backend through an HTTP endpoint within the cluster. This allows artifacts to be accessed via cluster-internal URLs instead of the mock `memory://` scheme, making them compatible with Flux and other Kubernetes-native tools.
+The HTTP Artifact Server enables the ExternalSource controller to serve artifacts stored in memory or PVC backends through an HTTP endpoint within the cluster. This allows artifacts to be accessed via cluster-internal URLs, making them compatible with Flux and other Kubernetes-native tools.
 
 **Key Features:**
-- Serves memory backend artifacts via HTTP
+- Serves memory and PVC backend artifacts via HTTP
+- StatefulSet architecture for stable pod identity
+- Pod-specific URLs for per-pod storage isolation
+- Headless service for direct pod access
+- Optional ClusterIP service for load-balanced access
 - Cluster-internal access using Kubernetes service DNS
 - No authentication required (internal-only)
 - Configurable port (default: 8080)
 - Graceful shutdown support
+- PVC support for persistent artifact storage
 - S3 backend unchanged (continues serving directly from S3)
 
 ## Architecture
+
+### StatefulSet Architecture
+
+The controller uses a StatefulSet deployment pattern for memory and PVC storage backends to provide:
+
+1. **Stable Pod Identity**: Each pod has a predictable name (e.g., `controller-manager-0`, `controller-manager-1`)
+2. **Per-Pod Storage**: Each replica has its own isolated storage (in-memory or PVC)
+3. **Pod-Specific URLs**: Artifacts are served via pod-specific URLs that include the pod name
+4. **Headless Service**: Direct pod-to-pod DNS resolution for accessing artifacts from specific pods
+
+**URL Pattern:**
+```
+http://{pod-name}.{headless-service}.{namespace}.svc.cluster.local:{port}/{artifact-key}
+```
+
+Example:
+```
+http://controller-manager-0.externalsource-artifacts.flux-system.svc.cluster.local:8080/default/my-source/rev123.tar.gz
+```
+
+### Storage Backend Comparison
+
+| Backend | Persistence | Multi-Replica | URL Pattern | Use Case |
+|---------|-------------|---------------|-------------|----------|
+| Memory | No | Yes (per-pod) | Pod-specific | Development/testing |
+| PVC | Yes | Yes (per-pod PVC) | Pod-specific | Production (persistent) |
+| S3 | Yes | Yes (shared) | Direct S3 | Production (shared storage) |
 
 ### High-Level Overview
 
@@ -29,7 +61,7 @@ graph TB
             end
         end
         
-        service["Service: flux-externalsource-controller-artifacts<br/>- Type: ClusterIP<br/>- Port: 8080<br/>- DNS: http://flux-externalsource-controller-artifacts<br/>.namespace.svc.cluster.local:8080"]
+        service["Service: externalsource-artifacts<br/>- Type: Headless<br/>- Port: 8080<br/>- DNS: http://externalsource-artifacts<br/>.namespace.svc.cluster.local:8080"]
         
         consumers["Flux Kustomization / Other Consumers<br/>- Fetch artifacts via HTTP GET<br/>- URL from ExternalSource status.artifact.url"]
         
@@ -97,7 +129,7 @@ sequenceDiagram
 #### 1. Configuration (`internal/config/config.go`)
 - Added `ArtifactServerConfig` struct with fields: `Enabled`, `Port`, `ServiceName`, `ServiceNamespace`
 - Added `ArtifactServer` field to main `Config` struct
-- Set defaults in `DefaultConfig()`: Port 8080, ServiceName "flux-externalsource-controller-artifacts"
+- Set defaults in `DefaultConfig()`: Port 8080, ServiceName "externalsource-artifacts"
 - Added `loadArtifactServerFromEnv()` to load configuration from environment variables
 - Added validation for artifact server configuration
 
@@ -147,7 +179,7 @@ sequenceDiagram
 #### 8. Kubernetes Manifests
 
 **Service (`config/manager/artifact-service.yaml`):**
-- Created Service resource named `flux-externalsource-controller-artifacts`
+- Created headless Service resource named `externalsource-artifacts`
 - Type: ClusterIP (internal cluster access only)
 - Exposes port 8080 (named "artifacts")
 - Selector matches controller pods
@@ -158,21 +190,37 @@ sequenceDiagram
   - `ARTIFACT_SERVER_PORT` (default "8080")
   - `ARTIFACT_SERVER_ENABLED` (default "true")
   - `POD_NAMESPACE` (from fieldRef: metadata.namespace)
-  - `SERVICE_NAME` (value "flux-externalsource-controller-artifacts")
+  - `SERVICE_NAME` (value "externalsource-artifacts")
 
 **Kustomization (`config/manager/kustomization.yaml`):**
 - Added `artifact-service.yaml` to resources list
 
 ### URL Format
 
-Memory backend artifacts are now accessible at:
+#### Memory and PVC Backends (Pod-Specific)
+
+Artifacts are accessible via pod-specific URLs:
 ```
-http://flux-externalsource-controller-artifacts.{namespace}.svc.cluster.local:8080/artifacts/{namespace}/{name}/{revision}.tar.gz
+http://{pod-name}.{headless-service}.{namespace}.svc.cluster.local:{port}/{artifact-key}
 ```
 
-Example:
+Examples:
 ```
-http://flux-externalsource-controller-artifacts.flux-system.svc.cluster.local:8080/artifacts/default/my-source/abc123def456.tar.gz
+# Direct access to pod 0
+http://controller-manager-0.externalsource-artifacts.flux-system.svc.cluster.local:8080/default/my-source/rev123.tar.gz
+
+# Direct access to pod 1
+http://controller-manager-1.externalsource-artifacts.flux-system.svc.cluster.local:8080/default/my-source/rev456.tar.gz
+
+# Load-balanced access (via regular ClusterIP service)
+http://externalsource-artifacts.flux-system.svc.cluster.local:8080/default/my-source/rev123.tar.gz
+```
+
+#### S3 Backend (Direct)
+
+S3 artifacts are accessed directly:
+```
+https://{s3-endpoint}/{bucket}/{artifact-key}
 ```
 
 ## Configuration
@@ -181,11 +229,13 @@ http://flux-externalsource-controller-artifacts.flux-system.svc.cluster.local:80
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `STORAGE_BACKEND` | `memory` | Storage backend type (`memory` or `s3`) |
+| `STORAGE_BACKEND` | `memory` | Storage backend type (`memory`, `pvc`, or `s3`) |
+| `PVC_STORAGE_PATH` | `/data/artifacts` | Path for PVC storage (when backend is `pvc`) |
 | `ARTIFACT_SERVER_ENABLED` | `true` | Enable artifact HTTP server |
 | `ARTIFACT_SERVER_PORT` | `8080` | Port for artifact HTTP server |
 | `POD_NAMESPACE` | - | Namespace where controller is deployed |
-| `SERVICE_NAME` | `flux-externalsource-controller-artifacts` | Service name for artifact server |
+| `POD_NAME` | - | Name of the controller pod (required for memory/PVC backends) |
+| `SERVICE_NAME` | `externalsource-artifacts` | Service name for artifact server |
 
 ### Command-Line Flags
 
@@ -193,6 +243,90 @@ http://flux-externalsource-controller-artifacts.flux-system.svc.cluster.local:80
 |------|---------|-------------|
 | `--artifact-server-port` | `8080` | Port for artifact HTTP server |
 | `--artifact-server-enabled` | `true` | Enable artifact HTTP server |
+
+## PVC Storage Backend
+
+### Overview
+
+The PVC storage backend provides persistent artifact storage using Kubernetes Persistent Volume Claims. Each StatefulSet replica gets its own PVC, providing isolated, persistent storage that survives pod restarts.
+
+### Configuration
+
+Enable PVC backend using the provided Kustomize patch:
+
+```bash
+# Apply the PVC patch
+kubectl apply -k config/manager -k config/manager/manager-pvc-patch.yaml
+```
+
+Or manually configure:
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: controller-manager
+spec:
+  volumeClaimTemplates:
+  - metadata:
+      name: artifact-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard  # Use your storage class
+      resources:
+        requests:
+          storage: 10Gi
+  template:
+    spec:
+      containers:
+      - name: manager
+        env:
+        - name: STORAGE_BACKEND
+          value: "pvc"
+        - name: PVC_STORAGE_PATH
+          value: "/data/artifacts"
+        volumeMounts:
+        - name: artifact-storage
+          mountPath: /data/artifacts
+```
+
+### Helm Chart Configuration
+
+Using Helm:
+
+```yaml
+# values.yaml
+controller:
+  storage:
+    backend: pvc
+    pvc:
+      enabled: true
+      storageClass: "standard"
+      size: 10Gi
+      path: "/data/artifacts"
+```
+
+Deploy:
+
+```bash
+helm install flux-externalsource-controller ./charts/flux-externalsource-controller \
+  --namespace flux-system \
+  --create-namespace \
+  --values values.yaml
+```
+
+### Benefits
+
+- **Persistence**: Artifacts survive pod restarts
+- **Per-Pod Isolation**: Each replica has its own storage
+- **Production Ready**: Suitable for production workloads
+- **Scalability**: Supports multiple replicas with independent storage
+
+### Considerations
+
+- Requires a storage class that supports `ReadWriteOnce` access mode
+- Each replica requires its own PVC (storage costs scale with replicas)
+- PVC cleanup requires manual deletion of PVCs when scaling down
 
 ## Testing
 
@@ -258,11 +392,11 @@ kubectl logs -n flux-system -l control-plane=controller-manager -c manager
 
 ```bash
 # Check service
-kubectl get svc -n flux-system flux-externalsource-controller-artifacts
+kubectl get svc -n flux-system externalsource-artifacts
 
 # Expected output:
 # NAME                                        TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
-# flux-externalsource-controller-artifacts   ClusterIP   10.96.xxx.xxx  <none>        8080/TCP   1m
+# externalsource-artifacts   ClusterIP   None           <none>        8080/TCP   1m
 ```
 
 #### 3. Create Test ExternalSource
@@ -295,7 +429,7 @@ kubectl wait --for=condition=Ready externalsource/test-http-source -n default --
 kubectl get externalsource test-http-source -n default -o jsonpath='{.status.artifact.url}'
 
 # Expected format:
-# http://flux-externalsource-controller-artifacts.flux-system.svc.cluster.local:8080/artifacts/default/test-http-source/<revision>.tar.gz
+# http://externalsource-artifacts.flux-system.svc.cluster.local:8080/artifacts/default/test-http-source/<revision>.tar.gz
 ```
 
 #### 5. Test Artifact Retrieval
@@ -413,7 +547,7 @@ kubectl get externalsource test-http-source -n default -o yaml | grep -A 10 arti
 **Check:**
 ```bash
 # Verify service endpoints
-kubectl get endpoints -n flux-system flux-externalsource-controller-artifacts
+kubectl get endpoints -n flux-system externalsource-artifacts
 
 # Should show pod IP and port 8080
 ```

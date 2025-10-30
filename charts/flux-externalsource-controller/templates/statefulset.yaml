@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "flux-externalsource-controller.fullname" . }}-manager
   namespace: {{ .Release.Namespace }}
@@ -11,6 +11,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  serviceName: {{ include "flux-externalsource-controller.artifactHeadlessServiceName" . }}
   replicas: {{ .Values.controller.replicas }}
   selector:
     matchLabels:
@@ -79,6 +80,10 @@ spec:
               key: {{ .Values.controller.storage.s3.credentialsSecret.secretKeyKey }}
         {{- end }}
         {{- end }}
+        {{- if eq .Values.controller.storage.backend "pvc" }}
+        - name: PVC_STORAGE_PATH
+          value: {{ .Values.controller.storage.pvc.path }}
+        {{- end }}
         - name: HTTP_TIMEOUT
           value: {{ .Values.controller.http.timeout }}
         - name: TRANSFORM_TIMEOUT
@@ -91,12 +96,26 @@ spec:
         - name: HOOK_DEFAULT_TIMEOUT
           value: {{ .Values.controller.hookExecutor.timeout }}
         {{- end }}
+        - name: ARTIFACT_SERVER_PORT
+          value: "8080"
+        - name: ARTIFACT_SERVER_ENABLED
+          value: "true"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: SERVICE_NAME
+          value: {{ include "flux-externalsource-controller.artifactHeadlessServiceName" . }}
         {{- with .Values.controller.env }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
         ports:
         - containerPort: 8080
-          name: metrics
+          name: artifacts
           protocol: TCP
         {{- if .Values.webhook.enabled }}
         - containerPort: {{ .Values.webhook.port }}
@@ -123,6 +142,10 @@ spec:
         - name: hook-whitelist
           mountPath: /etc/hooks
           readOnly: true
+        {{- if eq .Values.controller.storage.backend "pvc" }}
+        - name: artifact-storage
+          mountPath: {{ .Values.controller.storage.pvc.path }}
+        {{- end }}
         {{- with .Values.controller.volumeMounts }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
@@ -182,3 +205,18 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       terminationGracePeriodSeconds: 10
+  {{- if eq .Values.controller.storage.backend "pvc" }}
+  volumeClaimTemplates:
+  - metadata:
+      name: artifact-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      {{- if .Values.controller.storage.pvc.storageClass }}
+      storageClassName: {{ .Values.controller.storage.pvc.storageClass }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.controller.storage.pvc.size }}
+  {{- end }}
+
+

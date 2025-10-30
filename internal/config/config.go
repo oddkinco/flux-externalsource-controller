@@ -53,11 +53,14 @@ type Config struct {
 
 // StorageConfig holds storage backend configuration
 type StorageConfig struct {
-	// Backend type: "s3" or "memory"
+	// Backend type: "s3", "memory", or "pvc"
 	Backend string `json:"backend"`
 
 	// S3 configuration (used when Backend is "s3")
 	S3 S3Config `json:"s3"`
+
+	// PVC configuration (used when Backend is "pvc")
+	PVC PVCConfig `json:"pvc"`
 }
 
 // S3Config holds S3-compatible storage configuration
@@ -82,6 +85,12 @@ type S3Config struct {
 
 	// Path style for S3 requests (required for some S3-compatible services like MinIO)
 	PathStyle bool `json:"pathStyle"`
+}
+
+// PVCConfig holds PVC storage configuration
+type PVCConfig struct {
+	// Path to the directory where artifacts are stored
+	Path string `json:"path"`
 }
 
 // HTTPConfig holds HTTP client configuration
@@ -166,6 +175,9 @@ func DefaultConfig() *Config {
 				UseSSL:    true,
 				PathStyle: false,
 			},
+			PVC: PVCConfig{
+				Path: "/data/artifacts",
+			},
 		},
 		HTTP: HTTPConfig{
 			Timeout:             30 * time.Second,
@@ -193,7 +205,7 @@ func DefaultConfig() *Config {
 		ArtifactServer: ArtifactServerConfig{
 			Enabled:          true,
 			Port:             8080,
-			ServiceName:      "flux-externalsource-controller-artifacts",
+			ServiceName:      "externalsource-artifacts",
 			ServiceNamespace: "flux-system",
 		},
 	}
@@ -240,6 +252,11 @@ func (c *Config) loadStorageFromEnv() {
 		if pathStyle, err := strconv.ParseBool(pathStyleStr); err == nil {
 			c.Storage.S3.PathStyle = pathStyle
 		}
+	}
+
+	// PVC configuration
+	if path := os.Getenv("PVC_STORAGE_PATH"); path != "" {
+		c.Storage.PVC.Path = path
 	}
 }
 
@@ -351,8 +368,8 @@ func (c *Config) loadArtifactServerFromEnv() {
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	// Validate storage configuration
-	if c.Storage.Backend != "s3" && c.Storage.Backend != "memory" {
-		return fmt.Errorf("invalid storage backend: %s (must be 's3' or 'memory')", c.Storage.Backend)
+	if c.Storage.Backend != "s3" && c.Storage.Backend != "memory" && c.Storage.Backend != "pvc" {
+		return fmt.Errorf("invalid storage backend: %s (must be 's3', 'memory', or 'pvc')", c.Storage.Backend)
 	}
 
 	if c.Storage.Backend == "s3" {
@@ -367,6 +384,12 @@ func (c *Config) Validate() error {
 		}
 		if c.Storage.S3.SecretAccessKey == "" {
 			return fmt.Errorf("S3 secret access key is required when using S3 storage backend")
+		}
+	}
+
+	if c.Storage.Backend == "pvc" {
+		if c.Storage.PVC.Path == "" {
+			return fmt.Errorf("PVC storage path is required when using PVC storage backend")
 		}
 	}
 

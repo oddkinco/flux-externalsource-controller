@@ -1,20 +1,22 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: flux-externalsource-controller-artifacts
+  name: artifacts
   namespace: system
   labels:
     app.kubernetes.io/name: flux-externalsource-controller
     app.kubernetes.io/component: artifact-server
     app.kubernetes.io/managed-by: kustomize
 spec:
-  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  selector:
+    control-plane: controller-manager
+    app.kubernetes.io/name: flux-externalsource-controller
   ports:
   - name: artifacts
     port: 8080
     targetPort: 8080
     protocol: TCP
-  selector:
-    control-plane: controller-manager
-    app.kubernetes.io/name: flux-externalsource-controller
+  publishNotReadyAddresses: true  # Allow DNS records for pods that aren't ready yet
+
 

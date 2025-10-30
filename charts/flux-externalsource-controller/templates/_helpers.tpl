@@ -119,3 +119,26 @@ Create the name of the webhook issuer to use
 {{- define "flux-externalsource-controller.webhookIssuerName" -}}
 {{- printf "%s-selfsigned-issuer" (include "flux-externalsource-controller.fullname" .) }}
 {{- end }}
+
+{{/*
+Create the name of the artifact headless service to use
+*/}}
+{{- define "flux-externalsource-controller.artifactHeadlessServiceName" -}}
+{{- $prefix := .Values.nameOverride | default "" -}}
+{{- if $prefix -}}
+{{- printf "%s-artifacts" $prefix }}
+{{- else -}}
+{{- printf "externalsource-artifacts" }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Determine if StatefulSet should be used (for memory or pvc backends)
+*/}}
+{{- define "flux-externalsource-controller.useStatefulSet" -}}
+{{- if or (eq .Values.controller.storage.backend "memory") (eq .Values.controller.storage.backend "pvc") -}}
+true
+{{- else -}}
+false
+{{- end -}}
+{{- end }}
