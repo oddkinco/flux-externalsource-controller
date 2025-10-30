@@ -24,6 +24,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -369,7 +370,7 @@ func TestPVCBackend_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			key := filepath.Join("concurrent", "test", filepath.Base(t.Name()), filepath.Base(t.Name())+"_"+string(rune(idx))+".tar.gz")
+			key := filepath.Join("concurrent", "test", filepath.Base(t.Name()), fmt.Sprintf("%s_%d.tar.gz", filepath.Base(t.Name()), idx))
 			data := []byte("concurrent data")
 			_, err := backend.Store(ctx, key, data)
 			assert.NoError(t, err)
