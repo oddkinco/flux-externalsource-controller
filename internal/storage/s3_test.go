@@ -259,7 +259,7 @@ func TestS3Backend_Store(t *testing.T) {
 					tt.validateReq(t, r)
 				}
 				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.responseBody))
+				_, _ = w.Write([]byte(tt.responseBody))
 			}))
 			defer server.Close()
 
@@ -329,7 +329,7 @@ func TestS3Backend_List(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, "GET", r.Method)
 				w.WriteHeader(tt.statusCode)
-				w.Write([]byte(tt.responseBody))
+				_, _ = w.Write([]byte(tt.responseBody))
 			}))
 			defer server.Close()
 
@@ -394,7 +394,7 @@ func TestS3Backend_Delete(t *testing.T) {
 				assert.Contains(t, r.URL.Path, tt.key)
 				w.WriteHeader(tt.statusCode)
 				if tt.responseBody != "" {
-					w.Write([]byte(tt.responseBody))
+					_, _ = w.Write([]byte(tt.responseBody))
 				}
 			}))
 			defer server.Close()
@@ -453,10 +453,7 @@ func TestS3Backend_Store_ContextCancellation(t *testing.T) {
 	// Create a server that delays response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Server will be slow, giving time for context cancellation
-		select {
-		case <-r.Context().Done():
-			return
-		}
+		<-r.Context().Done()
 	}))
 	defer server.Close()
 
