@@ -196,9 +196,11 @@ spec:
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.controller.affinity }}
+      {{- if .Values.controller.affinity }}
+      {{- if or .Values.controller.affinity.podAffinity .Values.controller.affinity.podAntiAffinity .Values.controller.affinity.nodeAffinity }}
       affinity:
-        {{- toYaml . | nindent 8 }}
+        {{- toYaml .Values.controller.affinity | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- with .Values.controller.tolerations }}
       tolerations:
@@ -218,6 +220,7 @@ spec:
         requests:
           storage: {{ .Values.controller.storage.pvc.size }}
   {{- end }}
+
 
 
 
