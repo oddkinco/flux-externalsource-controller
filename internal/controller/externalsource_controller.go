@@ -549,13 +549,18 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 				return fmt.Errorf("failed to get created ExternalArtifact: %w", err)
 			}
 
-			// Ensure Status field is initialized
-			if createdArtifact.Status.Artifact == nil {
-				// Initialize status if needed
-			}
-
-			// Update status
+			// Update status - Status.Artifact field should be set directly
+			// The Status struct is automatically initialized by the client
 			createdArtifact.Status.Artifact = artifact
+			
+			log.Info("Attempting to update ExternalArtifact status", 
+				"name", artifactName, 
+				"resourceVersion", createdArtifact.ResourceVersion,
+				"url", artifact.URL,
+				"revision", artifact.Revision,
+				"digest", artifact.Digest,
+				"path", artifact.Path)
+			
 			if err := r.Status().Update(ctx, createdArtifact); err != nil {
 				// Retry on conflict or other transient errors
 				if apierrors.IsConflict(err) || (i < maxRetries-1 && apierrors.IsServerTimeout(err)) {
@@ -577,18 +582,29 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 			verifyArtifact := &sourcev1.ExternalArtifact{}
 			if err := r.Get(ctx, artifactKey, verifyArtifact); err != nil {
 				log.Error(err, "Failed to verify ExternalArtifact status update", "name", artifactName)
-				// Don't fail - status might still be updating
-			} else if verifyArtifact.Status.Artifact == nil || verifyArtifact.Status.Artifact.URL == "" {
+				if i < maxRetries-1 {
+					log.Info("Retrying after verification failure", "attempt", i+1, "maxRetries", maxRetries)
+					time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+					continue
+				}
+				// Status update succeeded but verification failed - assume it worked
+				log.Info("Status update succeeded but verification failed, assuming success", "name", artifactName)
+				return nil
+			}
+			
+			// Check if status was actually set
+			if verifyArtifact.Status.Artifact == nil || verifyArtifact.Status.Artifact.URL == "" {
 				if i < maxRetries-1 {
 					log.Info("Status update not yet visible, retrying", "attempt", i+1, "maxRetries", maxRetries)
 					time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 					continue
 				}
-				log.Error(nil, "ExternalArtifact status not set after update", "name", artifactName)
-				// Don't fail - let next reconciliation cycle handle it
+				// After all retries, status still not set - this is an error
+				log.Error(nil, "ExternalArtifact status not set after update", "name", artifactName, "resourceVersion", verifyArtifact.ResourceVersion)
+				return fmt.Errorf("ExternalArtifact status not set after %d update attempts", maxRetries)
 			}
 
-			log.Info("Successfully updated ExternalArtifact status", "name", artifactName, "url", artifactURL)
+			log.Info("Successfully updated ExternalArtifact status", "name", artifactName, "url", artifactURL, "resourceVersion", verifyArtifact.ResourceVersion)
 			return nil
 		}
 
