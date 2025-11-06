@@ -30,6 +30,7 @@ import (
 	"math/rand"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,8 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
 	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
@@ -539,12 +540,38 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 		}
 
 		// Update status after creation (status subresources cannot be set during creation)
-		newArtifact.Status.Artifact = artifact
-		if err := r.Status().Update(ctx, newArtifact); err != nil {
-			return fmt.Errorf("failed to update ExternalArtifact status: %w", err)
+		// Retry a few times in case of conflicts
+		maxRetries := 3
+		for i := 0; i < maxRetries; i++ {
+			// Re-fetch the created artifact to get the latest resourceVersion
+			createdArtifact := &sourcev1.ExternalArtifact{}
+			if err := r.Get(ctx, artifactKey, createdArtifact); err != nil {
+				return fmt.Errorf("failed to get created ExternalArtifact: %w", err)
+			}
+
+			// Update status
+			createdArtifact.Status.Artifact = artifact
+			if err := r.Status().Update(ctx, createdArtifact); err != nil {
+				// Retry on conflict or other transient errors
+				if apierrors.IsConflict(err) || (i < maxRetries-1 && apierrors.IsServerTimeout(err)) {
+					log.Info("Retrying ExternalArtifact status update", "attempt", i+1, "maxRetries", maxRetries, "error", err)
+					time.Sleep(time.Duration(100*(i+1)) * time.Millisecond) // Exponential backoff
+					continue
+				}
+				if i < maxRetries-1 {
+					// Retry on any error for the first few attempts
+					log.Info("Retrying ExternalArtifact status update", "attempt", i+1, "maxRetries", maxRetries, "error", err)
+					time.Sleep(time.Duration(100*(i+1)) * time.Millisecond) // Exponential backoff
+					continue
+				}
+				return fmt.Errorf("failed to update ExternalArtifact status after %d attempts: %w", maxRetries, err)
+			}
+
+			log.Info("Successfully updated ExternalArtifact status", "name", artifactName)
+			return nil
 		}
 
-		return nil
+		return fmt.Errorf("failed to update ExternalArtifact status after %d retries", maxRetries)
 	}
 
 	// Update existing ExternalArtifact if needed
