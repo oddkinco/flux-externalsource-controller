@@ -548,7 +548,7 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 			if i > 0 {
 				time.Sleep(time.Duration(100*i) * time.Millisecond)
 			}
-			
+
 			// Re-fetch the created artifact to get the latest resourceVersion
 			createdArtifact := &sourcev1.ExternalArtifact{}
 			if err := r.Get(ctx, artifactKey, createdArtifact); err != nil {
@@ -572,7 +572,7 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 			if createdArtifact.Status.Artifact == nil {
 				// Status.Artifact is nil, we'll set it below
 			}
-			
+
 			// Update status - Status.Artifact field should be set directly
 			createdArtifact.Status.Artifact = artifact
 
