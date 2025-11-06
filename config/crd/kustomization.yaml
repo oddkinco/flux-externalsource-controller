@@ -3,8 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/source.flux.oddkin.co_externalsources.yaml
-- bases/source.toolkit.fluxcd.io_externalartifacts.yaml
-# ExternalArtifact CRD is now provided by FluxCD source-controller (official CRD)
+# ExternalArtifact CRD is now provided by FluxCD source-controller
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
