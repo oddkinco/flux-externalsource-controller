@@ -33,6 +33,20 @@ rules:
   - update
   - watch
 - apiGroups:
+  - source.flux.oddkin.co
+  resources:
+  - externalsources/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - source.flux.oddkin.co
+  resources:
+  - externalsources/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - source.toolkit.fluxcd.io
   resources:
   - externalartifacts
@@ -45,24 +59,10 @@ rules:
   - update
   - watch
 - apiGroups:
-  - source.flux.oddkin.co
-  resources:
-  - externalsources/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - source.toolkit.fluxcd.io
   resources:
   - externalartifacts/status
   verbs:
   - get
   - patch
-  - update
-- apiGroups:
-  - source.flux.oddkin.co
-  resources:
-  - externalsources/finalizers
-  verbs:
   - update
