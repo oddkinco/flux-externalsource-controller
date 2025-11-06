@@ -30,6 +30,7 @@ import (
 	"math/rand"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -539,12 +540,8 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 		}
 
 		// Update status after creation (status subresources cannot be set during creation)
-		newArtifact.Status.Artifact = artifact
-		if err := r.Status().Update(ctx, newArtifact); err != nil {
-			return fmt.Errorf("failed to update ExternalArtifact status: %w", err)
-		}
-
-		return nil
+		// The object needs to be fully persisted before we can update its status
+		return r.updateExternalArtifactStatusWithRetry(ctx, artifactKey, artifactName, artifact, artifactURL)
 	}
 
 	// Update existing ExternalArtifact if needed
@@ -562,6 +559,97 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 	}
 
 	return nil
+}
+
+// updateExternalArtifactStatusWithRetry updates the ExternalArtifact status with retry logic
+func (r *ExternalSourceReconciler) updateExternalArtifactStatusWithRetry(ctx context.Context, artifactKey client.ObjectKey, artifactName string, artifact *fluxmeta.Artifact, artifactURL string) error {
+	log := logf.FromContext(ctx)
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		// Wait a bit before first attempt, longer for subsequent retries
+		if i > 0 {
+			time.Sleep(time.Duration(100*i) * time.Millisecond)
+		}
+
+		// Re-fetch the created artifact to get the latest resourceVersion
+		createdArtifact := &sourcev1.ExternalArtifact{}
+		if err := r.Get(ctx, artifactKey, createdArtifact); err != nil {
+			if apierrors.IsNotFound(err) {
+				// Object not found yet, retry
+				if i < maxRetries-1 {
+					log.Info("ExternalArtifact not found yet after creation, retrying", "attempt", i+1, "maxRetries", maxRetries, "name", artifactName)
+					continue
+				}
+				return fmt.Errorf("ExternalArtifact not found after %d attempts: %w", maxRetries, err)
+			}
+			// Other error
+			if i < maxRetries-1 {
+				log.Info("Failed to get ExternalArtifact, retrying", "attempt", i+1, "error", err)
+				continue
+			}
+			return fmt.Errorf("failed to get created ExternalArtifact: %w", err)
+		}
+
+		// Update status - Status.Artifact field should be set directly
+		createdArtifact.Status.Artifact = artifact
+
+		log.Info("Attempting to update ExternalArtifact status",
+			"name", artifactName,
+			"resourceVersion", createdArtifact.ResourceVersion,
+			"url", artifact.URL,
+			"revision", artifact.Revision,
+			"digest", artifact.Digest,
+			"path", artifact.Path)
+
+		if err := r.Status().Update(ctx, createdArtifact); err != nil {
+			log.Error(err, "Status update failed", "name", artifactName, "errorType", fmt.Sprintf("%T", err))
+			// Retry on conflict or other transient errors
+			if apierrors.IsConflict(err) || (i < maxRetries-1 && apierrors.IsServerTimeout(err)) {
+				log.Info("Retrying ExternalArtifact status update", "attempt", i+1, "maxRetries", maxRetries, "error", err)
+				time.Sleep(time.Duration(100*(i+1)) * time.Millisecond) // Exponential backoff
+				continue
+			}
+			if i < maxRetries-1 {
+				// Retry on any error for the first few attempts
+				log.Info("Retrying ExternalArtifact status update", "attempt", i+1, "maxRetries", maxRetries, "error", err)
+				time.Sleep(time.Duration(100*(i+1)) * time.Millisecond) // Exponential backoff
+				continue
+			}
+			log.Error(err, "Failed to update ExternalArtifact status after all retries", "name", artifactName, "attempts", maxRetries)
+			return fmt.Errorf("failed to update ExternalArtifact status after %d attempts: %w", maxRetries, err)
+		}
+
+		// Verify the status update persisted by re-fetching
+		verifyArtifact := &sourcev1.ExternalArtifact{}
+		if err := r.Get(ctx, artifactKey, verifyArtifact); err != nil {
+			log.Error(err, "Failed to verify ExternalArtifact status update", "name", artifactName)
+			if i < maxRetries-1 {
+				log.Info("Retrying after verification failure", "attempt", i+1, "maxRetries", maxRetries)
+				time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+				continue
+			}
+			// Status update succeeded but verification failed - assume it worked
+			log.Info("Status update succeeded but verification failed, assuming success", "name", artifactName)
+			return nil
+		}
+
+		// Check if status was actually set
+		if verifyArtifact.Status.Artifact == nil || verifyArtifact.Status.Artifact.URL == "" {
+			if i < maxRetries-1 {
+				log.Info("Status update not yet visible, retrying", "attempt", i+1, "maxRetries", maxRetries)
+				time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+				continue
+			}
+			// After all retries, status still not set - this is an error
+			log.Error(nil, "ExternalArtifact status not set after update", "name", artifactName, "resourceVersion", verifyArtifact.ResourceVersion)
+			return fmt.Errorf("ExternalArtifact status not set after %d update attempts", maxRetries)
+		}
+
+		log.Info("Successfully updated ExternalArtifact status", "name", artifactName, "url", artifactURL, "resourceVersion", verifyArtifact.ResourceVersion)
+		return nil
+	}
+
+	return fmt.Errorf("failed to update ExternalArtifact status after %d retries", maxRetries)
 }
 
 // reconcileDelete handles the deletion of an ExternalSource

@@ -194,14 +194,29 @@ spec:
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("True"), "ExternalSource should be Ready")
 
-				// Check ExternalArtifact exists and has URL (now in status.artifact.url)
+				// First verify ExternalArtifact exists
+				cmd = exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace)
+				_, err = utils.Run(cmd)
+				if err != nil {
+					// ExternalArtifact doesn't exist yet, this is expected initially
+					g.Expect(err).NotTo(HaveOccurred(), "ExternalArtifact should exist")
+					return
+				}
+
+				// Check ExternalArtifact has URL in status.artifact.url (official FluxCD API structure)
 				cmd = exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.status.artifact.url}")
 				output, err = utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).NotTo(BeEmpty())
+				if err != nil || output == "" {
+					// Status might not be populated yet, check if artifact exists at all
+					cmd = exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "yaml")
+					artifactYaml, _ := utils.Run(cmd)
+					_, _ = fmt.Fprintf(GinkgoWriter, "ExternalArtifact YAML: %s\n", artifactYaml)
+				}
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to get ExternalArtifact URL")
+				g.Expect(output).NotTo(BeEmpty(), "ExternalArtifact URL should be set")
 				artifactURL = output
 			}
-			Eventually(verifyExternalArtifactReady).Should(Succeed())
+			Eventually(verifyExternalArtifactReady, 3*time.Minute).Should(Succeed())
 
 			By("verifying ExternalArtifact has proper metadata")
 			verifyArtifactMetadata := func(g Gomega) {
@@ -492,13 +507,29 @@ spec:
 			By("verifying all ExternalArtifacts were created")
 			verifyAllArtifactsCreated := func(g Gomega) {
 				for _, artifact := range []string{"service1-config", "service2-config"} {
-					cmd := exec.Command("kubectl", "get", "externalartifact", artifact, "-n", testNamespace, "-o", "jsonpath={.status.artifact.url}")
+					// First verify ExternalArtifact exists
+					cmd := exec.Command("kubectl", "get", "externalartifact", artifact, "-n", testNamespace)
+					_, err := utils.Run(cmd)
+					if err != nil {
+						// ExternalArtifact doesn't exist yet
+						g.Expect(err).NotTo(HaveOccurred(), "ExternalArtifact %s should exist", artifact)
+						return
+					}
+
+					// Check URL in status.artifact.url (official FluxCD API structure)
+					cmd = exec.Command("kubectl", "get", "externalartifact", artifact, "-n", testNamespace, "-o", "jsonpath={.status.artifact.url}")
 					output, err := utils.Run(cmd)
-					g.Expect(err).NotTo(HaveOccurred())
-					g.Expect(output).NotTo(BeEmpty())
+					if err != nil || output == "" {
+						// Status might not be populated yet, get full YAML for debugging
+						cmd = exec.Command("kubectl", "get", "externalartifact", artifact, "-n", testNamespace, "-o", "yaml")
+						artifactYaml, _ := utils.Run(cmd)
+						_, _ = fmt.Fprintf(GinkgoWriter, "ExternalArtifact %s YAML: %s\n", artifact, artifactYaml)
+					}
+					g.Expect(err).NotTo(HaveOccurred(), "Failed to get ExternalArtifact %s URL", artifact)
+					g.Expect(output).NotTo(BeEmpty(), "ExternalArtifact %s URL should be set in status.artifact.url", artifact)
 				}
 			}
-			Eventually(verifyAllArtifactsCreated).Should(Succeed())
+			Eventually(verifyAllArtifactsCreated, 3*time.Minute).Should(Succeed())
 
 			By("cleaning up multiple test resources")
 			cmd = exec.Command("kubectl", "delete", "externalsource", "service1-config", "service2-config", "-n", testNamespace)

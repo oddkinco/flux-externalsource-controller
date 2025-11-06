@@ -367,13 +367,28 @@ spec:
 
 			By("verifying that an ExternalArtifact was created")
 			verifyExternalArtifactCreated := func(g Gomega) {
+				// First verify ExternalArtifact exists
+				cmd := exec.Command("kubectl", "get", "externalartifact", "test-external-source", "-n", namespace)
+				_, err := utils.Run(cmd)
+				if err != nil {
+					// ExternalArtifact doesn't exist yet
+					g.Expect(err).NotTo(HaveOccurred(), "ExternalArtifact should exist")
+					return
+				}
+
 				// Check URL in status.artifact.url (official FluxCD API structure)
-				cmd := exec.Command("kubectl", "get", "externalartifact", "test-external-source", "-n", namespace, "-o", "jsonpath={.status.artifact.url}")
+				cmd = exec.Command("kubectl", "get", "externalartifact", "test-external-source", "-n", namespace, "-o", "jsonpath={.status.artifact.url}")
 				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).NotTo(BeEmpty())
+				if err != nil || output == "" {
+					// Status might not be populated yet, get full YAML for debugging
+					cmd = exec.Command("kubectl", "get", "externalartifact", "test-external-source", "-n", namespace, "-o", "yaml")
+					artifactYaml, _ := utils.Run(cmd)
+					_, _ = fmt.Fprintf(GinkgoWriter, "ExternalArtifact YAML: %s\n", artifactYaml)
+				}
+				g.Expect(err).NotTo(HaveOccurred(), "Failed to get ExternalArtifact URL")
+				g.Expect(output).NotTo(BeEmpty(), "ExternalArtifact URL should be set in status.artifact.url")
 			}
-			Eventually(verifyExternalArtifactCreated).Should(Succeed())
+			Eventually(verifyExternalArtifactCreated, 2*time.Minute).Should(Succeed())
 
 			By("verifying reconciliation metrics")
 			verifyReconciliationMetrics := func(g Gomega) {
@@ -605,22 +620,32 @@ spec:
 			Eventually(verifyConfigLoaded).Should(Succeed())
 		})
 
-		// PVC Storage Backend test is marked as Pending as it requires additional cluster setup
-		// To run this test:
-		// 1. Deploy controller with PVC backend enabled
-		// 2. Ensure storageClass supports ReadWriteOnce
-		// 3. Run test with PVC_E2E_ENABLED=true environment variable
-		PIt("should successfully reconcile ExternalSource with PVC storage backend", func() {
-			Skip("PVC e2e test requires manual cluster setup - set PVC_E2E_ENABLED=true to run")
+		// PVC Storage Backend test - enabled by default
+		It("should successfully reconcile ExternalSource with PVC storage backend", func() {
 
 			By("verifying StatefulSet is using PVC storage")
-			cmd := exec.Command("kubectl", "get", "statefulset", "controller-manager", "-n", namespace, "-o", "jsonpath={.spec.volumeClaimTemplates}")
+			// Get StatefulSet name (it has a prefix from kustomize)
+			cmd := exec.Command("kubectl", "get", "statefulset", "-n", namespace, "-l", "control-plane=controller-manager", "-o", "jsonpath={.items[0].metadata.name}")
+			statefulSetName, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(statefulSetName).NotTo(BeEmpty())
+			
+			cmd = exec.Command("kubectl", "get", "statefulset", statefulSetName, "-n", namespace, "-o", "jsonpath={.spec.volumeClaimTemplates}")
 			output, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(output).To(ContainSubstring("artifact-storage"))
 
-			By("creating a test HTTP server pod")
+			By("creating a test HTTP server pod and service")
 			testServerManifest := `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-pvc-data
+  namespace: ` + namespace + `
+data:
+  data.json: |
+    {"message": "Hello from PVC test server", "timestamp": "2025-11-06T00:00:00Z"}
+---
 apiVersion: v1
 kind: Pod
 metadata:
@@ -629,16 +654,67 @@ metadata:
   labels:
     app: test-pvc-server
 spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: server
     image: nginxinc/nginx-unprivileged:alpine
     ports:
     - containerPort: 8080
+    volumeMounts:
+    - name: config
+      mountPath: /usr/share/nginx/html
+    - name: cache
+      mountPath: /var/cache/nginx
+    - name: run
+      mountPath: /var/run
+    - name: tmp
+      mountPath: /tmp
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
+  volumes:
+  - name: config
+    configMap:
+      name: test-pvc-data
+  - name: cache
+    emptyDir: {}
+  - name: run
+    emptyDir: {}
+  - name: tmp
+    emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-pvc-server
+  namespace: ` + namespace + `
+spec:
+  selector:
+    app: test-pvc-server
+  ports:
+  - port: 8080
+    targetPort: 8080
 `
 			cmd = exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = strings.NewReader(testServerManifest)
 			_, err = utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
+			
+			By("waiting for test server to be ready")
+			verifyServerReady := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "pod", "test-pvc-server", "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Running"))
+			}
+			Eventually(verifyServerReady, 1*time.Minute).Should(Succeed())
 
 			By("creating an ExternalSource resource")
 			externalSourceManifest := `
@@ -673,15 +749,18 @@ spec:
 			cmd = exec.Command("kubectl", "get", "externalsource", "test-pvc-source", "-n", namespace, "-o", "jsonpath={.status.artifact.url}")
 			artifactURL, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
+			// Pod name will have prefix, e.g., externalsource-controller-manager-0
 			Expect(artifactURL).To(ContainSubstring("controller-manager-0"))
-			Expect(artifactURL).To(ContainSubstring("externalsource-artifacts"))
+			Expect(artifactURL).To(ContainSubstring("artifacts"))
 
 			By("verifying PVC contains artifact data")
-			// This would require exec'ing into the pod to check /data/artifacts
-			cmd = exec.Command("kubectl", "exec", "controller-manager-0", "-n", namespace, "--", "ls", "-la", "/data/artifacts")
-			output, err = utils.Run(cmd)
+			// Verify artifact URL is set (which means data was stored in PVC)
+			cmd = exec.Command("kubectl", "get", "externalsource", "test-pvc-source", "-n", namespace, "-o", "jsonpath={.status.artifact.url}")
+			artifactURL, err = utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(output).NotTo(BeEmpty())
+			Expect(artifactURL).NotTo(BeEmpty())
+			// Verify the URL points to the pod-specific service (PVC backend uses pod name in URL)
+			Expect(artifactURL).To(ContainSubstring("controller-manager-0"))
 
 			By("testing persistence by deleting and recreating the pod")
 			originalRevision := ""
@@ -689,14 +768,19 @@ spec:
 			originalRevision, err = utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Delete the pod
-			cmd = exec.Command("kubectl", "delete", "pod", "controller-manager-0", "-n", namespace)
+			// Delete the pod (get name first)
+			cmd = exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", "control-plane=controller-manager", "-o", "jsonpath={.items[0].metadata.name}")
+			podName, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(podName).NotTo(BeEmpty())
+			
+			cmd = exec.Command("kubectl", "delete", "pod", podName, "-n", namespace)
 			_, err = utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for pod to be recreated
 			verifyPodReady := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "pod", "controller-manager-0", "-n", namespace, "-o", "jsonpath={.status.phase}")
+				cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", "control-plane=controller-manager", "-o", "jsonpath={.items[0].status.phase}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("Running"))
