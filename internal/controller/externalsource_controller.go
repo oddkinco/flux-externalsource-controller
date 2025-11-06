@@ -39,8 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
 	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
@@ -552,10 +552,8 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 
 	if needsUpdate {
 		log.Info("Updating ExternalArtifact", "name", artifactName, "url", artifactURL, "revision", revision)
-		existingArtifact.Status.Artifact = artifact
-		if err := r.Status().Update(ctx, existingArtifact); err != nil {
-			return fmt.Errorf("failed to update ExternalArtifact status: %w", err)
-		}
+		// Use retry logic for existing artifacts as well to handle conflicts and ensure status is set
+		return r.updateExternalArtifactStatusWithRetry(ctx, artifactKey, artifactName, artifact, artifactURL)
 	}
 
 	return nil
@@ -566,9 +564,13 @@ func (r *ExternalSourceReconciler) updateExternalArtifactStatusWithRetry(ctx con
 	log := logf.FromContext(ctx)
 	maxRetries := 10
 	for i := 0; i < maxRetries; i++ {
-		// Wait a bit before first attempt, longer for subsequent retries
+		// Wait a bit before each attempt to allow object to be available and avoid conflicts
+		// First attempt gets a small delay, subsequent retries get longer delays
 		if i > 0 {
 			time.Sleep(time.Duration(100*i) * time.Millisecond)
+		} else {
+			// Small initial delay to allow object to be fully available after creation
+			time.Sleep(50 * time.Millisecond)
 		}
 
 		// Re-fetch the created artifact to get the latest resourceVersion
