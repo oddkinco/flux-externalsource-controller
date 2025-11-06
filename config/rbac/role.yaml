@@ -23,8 +23,19 @@ rules:
 - apiGroups:
   - source.flux.oddkin.co
   resources:
-  - externalartifacts
   - externalsources
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - externalartifacts
   verbs:
   - create
   - delete
@@ -36,8 +47,15 @@ rules:
 - apiGroups:
   - source.flux.oddkin.co
   resources:
-  - externalartifacts/status
   - externalsources/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - externalartifacts/status
   verbs:
   - get
   - patch

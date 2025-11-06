@@ -80,43 +80,6 @@ func TestExternalSourceDeepCopy(t *testing.T) {
 	assert.Equal(t, original.Name, copiedObj.Name)
 }
 
-func TestExternalArtifactDeepCopy(t *testing.T) {
-	original := &ExternalArtifact{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-artifact",
-			Namespace: "test-namespace",
-		},
-		Spec: ExternalArtifactSpec{
-			URL:      "https://storage.example.com/artifact.tar.gz",
-			Revision: "abc123def456",
-			Metadata: map[string]string{
-				"contentType": "application/gzip",
-			},
-		},
-	}
-
-	// Test DeepCopy
-	copied := original.DeepCopy()
-
-	// Verify it's a different object
-	assert.NotSame(t, original, copied)
-	assert.Equal(t, original.Name, copied.Name)
-	assert.Equal(t, original.Spec.URL, copied.Spec.URL)
-
-	// Verify deep copy
-	copied.Name = "modified-artifact"
-	copied.Spec.Metadata["new"] = "value"
-
-	assert.NotEqual(t, original.Name, copied.Name)
-	assert.NotContains(t, original.Spec.Metadata, "new")
-
-	// Test DeepCopyObject
-	obj := original.DeepCopyObject()
-	copiedObj, ok := obj.(*ExternalArtifact)
-	assert.True(t, ok)
-	assert.Equal(t, original.Spec.URL, copiedObj.Spec.URL)
-}
-
 func TestExternalSourceSpecDeepCopy(t *testing.T) {
 	original := ExternalSourceSpec{
 		Interval: "10m",
@@ -288,30 +251,6 @@ func TestExternalSourceListDeepCopy(t *testing.T) {
 	assert.Len(t, copiedObj.Items, 2)
 }
 
-func TestExternalArtifactListDeepCopy(t *testing.T) {
-	original := &ExternalArtifactList{
-		Items: []ExternalArtifact{
-			{
-				ObjectMeta: metav1.ObjectMeta{Name: "artifact1"},
-				Spec:       ExternalArtifactSpec{URL: "https://example.com/artifact1.tar.gz"},
-			},
-		},
-	}
-
-	copied := original.DeepCopy()
-
-	// Verify deep copy
-	assert.NotSame(t, original, copied)
-	assert.Len(t, copied.Items, 1)
-	assert.Equal(t, original.Items[0].Spec.URL, copied.Items[0].Spec.URL)
-
-	// Test DeepCopyObject
-	obj := original.DeepCopyObject()
-	copiedObj, ok := obj.(*ExternalArtifactList)
-	assert.True(t, ok)
-	assert.Len(t, copiedObj.Items, 1)
-}
-
 func TestExternalSourceSpecDeepCopyWithNilValues(t *testing.T) {
 	original := ExternalSourceSpec{
 		Interval: "5m",
@@ -375,26 +314,6 @@ func TestHooksSpecWithEmptySlices(t *testing.T) {
 	assert.NotSame(t, &original, copied)
 	assert.Empty(t, copied.PreRequest)
 	assert.Nil(t, copied.PostRequest)
-}
-
-func TestExternalArtifactSpecDeepCopy(t *testing.T) {
-	original := ExternalArtifactSpec{
-		URL:      "https://storage.example.com/artifact.tar.gz",
-		Revision: "abc123",
-		Metadata: map[string]string{
-			"key1": "value1",
-			"key2": "value2",
-		},
-	}
-
-	copied := original.DeepCopy()
-
-	assert.Equal(t, original.URL, copied.URL)
-	assert.Equal(t, original.Metadata, copied.Metadata)
-
-	// Modify copy to verify deep copy
-	copied.Metadata["key3"] = "value3"
-	assert.NotContains(t, original.Metadata, "key3")
 }
 
 func TestExternalSourceStatusDeepCopy(t *testing.T) {

@@ -18,12 +18,6 @@ resources:
   kind: ExternalSource
   path: github.com/oddkinco/flux-externalsource-controller/api/v1alpha1
   version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  domain: flux.oddkin.co
-  group: source
-  kind: ExternalArtifact
-  path: github.com/oddkinco/flux-externalsource-controller/api/v1alpha1
-  version: v1alpha1
+# ExternalArtifact has been migrated to official FluxCD source-controller API
+# Use github.com/fluxcd/source-controller/api/v1.ExternalArtifact instead
 version: "3"

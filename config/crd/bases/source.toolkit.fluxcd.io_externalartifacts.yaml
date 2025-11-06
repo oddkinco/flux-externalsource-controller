@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: externalartifacts.source.flux.oddkin.co
+  name: externalartifacts.source.toolkit.fluxcd.io
 spec:
-  group: source.flux.oddkin.co
+  group: source.toolkit.fluxcd.io
   names:
     kind: ExternalArtifact
     listKind: ExternalArtifactList
@@ -15,19 +15,22 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.url
-      name: URL
-      type: string
-    - jsonPath: .spec.revision
-      name: Revision
-      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1alpha1
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].message
+      name: Status
+      type: string
+    - jsonPath: .spec.sourceRef.name
+      name: Source
+      type: string
+    name: v1
     schema:
       openAPIV3Schema:
-        description: ExternalArtifact is the Schema for the externalartifacts API
+        description: ExternalArtifact is the Schema for the external artifacts API
         properties:
           apiVersion:
             description: |-
@@ -47,29 +50,84 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of ExternalArtifact
+            description: ExternalArtifactSpec defines the desired state of ExternalArtifact
             properties:
-              metadata:
-                additionalProperties:
-                  type: string
-                description: Metadata contains additional artifact metadata
+              sourceRef:
+                description: |-
+                  SourceRef points to the Kubernetes custom resource for
+                  which the artifact is generated.
+                properties:
+                  apiVersion:
+                    description: API version of the referent, if not specified the
+                      Kubernetes preferred version will be used.
+                    type: string
+                  kind:
+                    description: Kind of the referent.
+                    type: string
+                  name:
+                    description: Name of the referent.
+                    type: string
+                  namespace:
+                    description: Namespace of the referent, when not specified it
+                      acts as LocalObjectReference.
+                    type: string
+                required:
+                - kind
+                - name
                 type: object
-              revision:
-                description: Revision is the content-based revision of the artifact
-                type: string
-              url:
-                description: URL is the location where the artifact can be accessed
-                type: string
-            required:
-            - revision
-            - url
             type: object
           status:
-            description: status defines the observed state of ExternalArtifact
+            description: ExternalArtifactStatus defines the observed state of ExternalArtifact
             properties:
+              artifact:
+                description: Artifact represents the output of an ExternalArtifact
+                  reconciliation.
+                properties:
+                  digest:
+                    description: Digest is the digest of the file in the form of '<algorithm>:<checksum>'.
+                    pattern: ^[a-z0-9]+(?:[.+_-][a-z0-9]+)*:[a-zA-Z0-9=_-]+$
+                    type: string
+                  lastUpdateTime:
+                    description: |-
+                      LastUpdateTime is the timestamp corresponding to the last update of the
+                      Artifact.
+                    format: date-time
+                    type: string
+                  metadata:
+                    additionalProperties:
+                      type: string
+                    description: Metadata holds upstream information such as OCI annotations.
+                    type: object
+                  path:
+                    description: |-
+                      Path is the relative file path of the Artifact. It can be used to locate
+                      the file in the root of the Artifact storage on the local file system of
+                      the controller managing the Source.
+                    type: string
+                  revision:
+                    description: |-
+                      Revision is a human-readable identifier traceable in the origin source
+                      system. It can be a Git commit SHA, Git tag, a Helm chart version, etc.
+                    type: string
+                  size:
+                    description: Size is the number of bytes in the file.
+                    format: int64
+                    type: integer
+                  url:
+                    description: |-
+                      URL is the HTTP address of the Artifact as exposed by the controller
+                      managing the Source. It can be used to retrieve the Artifact for
+                      consumption, e.g. by another controller applying the Artifact contents.
+                    type: string
+                required:
+                - digest
+                - lastUpdateTime
+                - path
+                - revision
+                - url
+                type: object
               conditions:
-                description: Conditions represent the current state of the ExternalArtifact
-                  resource
+                description: Conditions holds the conditions for the ExternalArtifact.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -125,17 +183,7 @@ spec:
                   - type
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
-              observedGeneration:
-                description: ObservedGeneration is the last observed generation of
-                  the ExternalArtifact
-                format: int64
-                type: integer
             type: object
-        required:
-        - spec
         type: object
     served: true
     storage: true
