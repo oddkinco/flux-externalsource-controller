@@ -625,7 +625,7 @@ func (r *ExternalSourceReconciler) updateExternalArtifactStatusWithRetry(ctx con
 		// Verify the status update persisted by re-fetching
 		// Add a small delay before verification to allow status to propagate
 		time.Sleep(100 * time.Millisecond)
-		
+
 		verifyArtifact := &sourcev1.ExternalArtifact{}
 		if err := r.Get(ctx, artifactKey, verifyArtifact); err != nil {
 			log.Error(err, "Failed to verify ExternalArtifact status update", "name", artifactName)
@@ -636,7 +636,7 @@ func (r *ExternalSourceReconciler) updateExternalArtifactStatusWithRetry(ctx con
 			}
 			// Status update succeeded but verification failed - this is concerning
 			// Try one more time with a longer delay before giving up
-			log.Warn("Status update succeeded but verification failed, retrying verification", "name", artifactName)
+			log.Info("Status update succeeded but verification failed, retrying verification", "name", artifactName)
 			time.Sleep(500 * time.Millisecond)
 			if err := r.Get(ctx, artifactKey, verifyArtifact); err != nil {
 				log.Error(err, "Verification still failed after additional retry", "name", artifactName)
