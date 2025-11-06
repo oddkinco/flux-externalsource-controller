@@ -194,8 +194,8 @@ spec:
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("True"), "ExternalSource should be Ready")
 
-				// Check ExternalArtifact exists and has URL
-				cmd = exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.spec.url}")
+				// Check ExternalArtifact exists and has URL (now in status.artifact.url)
+				cmd = exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.status.artifact.url}")
 				output, err = utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).NotTo(BeEmpty())
@@ -205,8 +205,8 @@ spec:
 
 			By("verifying ExternalArtifact has proper metadata")
 			verifyArtifactMetadata := func(g Gomega) {
-				// Check revision is set
-				cmd := exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.spec.revision}")
+				// Check revision is set (now in status.artifact.revision)
+				cmd := exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.status.artifact.revision}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).NotTo(BeEmpty())
@@ -214,6 +214,12 @@ spec:
 
 				// Verify artifact URL is accessible (this would be done by Flux in real scenarios)
 				g.Expect(artifactURL).To(ContainSubstring("app-config-source"))
+				
+				// Verify sourceRef is set correctly
+				cmd = exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.spec.sourceRef.name}")
+				output, err = utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("app-config-source"))
 			}
 			Eventually(verifyArtifactMetadata).Should(Succeed())
 
@@ -228,6 +234,9 @@ spec:
 
 				// Verify it has the required fields that Flux controllers expect
 				g.Expect(output).To(ContainSubstring("spec:"))
+				g.Expect(output).To(ContainSubstring("sourceRef:"))
+				g.Expect(output).To(ContainSubstring("status:"))
+				g.Expect(output).To(ContainSubstring("artifact:"))
 				g.Expect(output).To(ContainSubstring("url:"))
 				g.Expect(output).To(ContainSubstring("revision:"))
 			}
@@ -265,7 +274,7 @@ data:
 			By("waiting for ExternalSource to detect changes and update artifact")
 			var newRevision string
 			verifyArtifactUpdate := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.spec.revision}")
+				cmd := exec.Command("kubectl", "get", "externalartifact", "app-config-source", "-n", testNamespace, "-o", "jsonpath={.status.artifact.revision}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).NotTo(BeEmpty())
@@ -483,7 +492,7 @@ spec:
 			By("verifying all ExternalArtifacts were created")
 			verifyAllArtifactsCreated := func(g Gomega) {
 				for _, artifact := range []string{"service1-config", "service2-config"} {
-					cmd := exec.Command("kubectl", "get", "externalartifact", artifact, "-n", testNamespace, "-o", "jsonpath={.spec.url}")
+					cmd := exec.Command("kubectl", "get", "externalartifact", artifact, "-n", testNamespace, "-o", "jsonpath={.status.artifact.url}")
 					output, err := utils.Run(cmd)
 					g.Expect(err).NotTo(HaveOccurred())
 					g.Expect(output).NotTo(BeEmpty())

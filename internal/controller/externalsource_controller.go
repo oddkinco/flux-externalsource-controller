@@ -38,6 +38,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	fluxmeta "github.com/fluxcd/pkg/apis/meta"
 	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
 	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
@@ -105,8 +107,8 @@ const (
 // +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalsources,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalsources/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalsources/finalizers,verbs=update
-// +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalartifacts,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=source.flux.oddkin.co,resources=externalartifacts/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=externalartifacts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=source.toolkit.fluxcd.io,resources=externalartifacts/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
@@ -482,7 +484,7 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 	artifactName := externalSource.Name
 
 	// Check if ExternalArtifact already exists
-	existingArtifact := &sourcev1alpha1.ExternalArtifact{}
+	existingArtifact := &sourcev1.ExternalArtifact{}
 	artifactKey := client.ObjectKey{
 		Namespace: externalSource.Namespace,
 		Name:      artifactName,
@@ -493,17 +495,36 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 		return fmt.Errorf("failed to get ExternalArtifact: %w", err)
 	}
 
+	// Prepare artifact metadata
+	artifactMetadata := make(map[string]string)
+	for k, v := range metadata {
+		artifactMetadata[k] = v
+	}
+
+	// Create artifact object for status
+	artifact := &fluxmeta.Artifact{
+		URL:            artifactURL,
+		Path:           artifactURL, // Path can be the same as URL for external artifacts
+		Revision:       revision,
+		Digest:         "sha256:" + revision, // Format as sha256 digest
+		LastUpdateTime: metav1.Now(),
+		Metadata:       artifactMetadata,
+	}
+
 	// Create new ExternalArtifact if it doesn't exist (when err is NotFound)
 	if err != nil && client.IgnoreNotFound(err) == nil {
-		newArtifact := &sourcev1alpha1.ExternalArtifact{
+		newArtifact := &sourcev1.ExternalArtifact{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      artifactName,
 				Namespace: externalSource.Namespace,
 			},
-			Spec: sourcev1alpha1.ExternalArtifactSpec{
-				URL:      artifactURL,
-				Revision: revision,
-				Metadata: metadata,
+			Spec: sourcev1.ExternalArtifactSpec{
+				SourceRef: &fluxmeta.NamespacedObjectKindReference{
+					APIVersion: sourcev1alpha1.GroupVersion.String(),
+					Kind:       "ExternalSource",
+					Name:       externalSource.Name,
+					Namespace:  externalSource.Namespace,
+				},
 			},
 		}
 
@@ -517,28 +538,26 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 			return fmt.Errorf("failed to create ExternalArtifact: %w", err)
 		}
 
+		// Update status after creation (status subresources cannot be set during creation)
+		newArtifact.Status.Artifact = artifact
+		if err := r.Status().Update(ctx, newArtifact); err != nil {
+			return fmt.Errorf("failed to update ExternalArtifact status: %w", err)
+		}
+
 		return nil
 	}
 
 	// Update existing ExternalArtifact if needed
-	needsUpdate := false
-	if existingArtifact.Spec.URL != artifactURL {
-		existingArtifact.Spec.URL = artifactURL
-		needsUpdate = true
-	}
-	if existingArtifact.Spec.Revision != revision {
-		existingArtifact.Spec.Revision = revision
-		needsUpdate = true
-	}
-	if !mapsEqual(existingArtifact.Spec.Metadata, metadata) {
-		existingArtifact.Spec.Metadata = metadata
-		needsUpdate = true
-	}
+	needsUpdate := existingArtifact.Status.Artifact == nil ||
+		existingArtifact.Status.Artifact.URL != artifactURL ||
+		existingArtifact.Status.Artifact.Revision != revision ||
+		(existingArtifact.Status.Artifact != nil && !mapsEqual(existingArtifact.Status.Artifact.Metadata, artifactMetadata))
 
 	if needsUpdate {
 		log.Info("Updating ExternalArtifact", "name", artifactName, "url", artifactURL, "revision", revision)
-		if err := r.Update(ctx, existingArtifact); err != nil {
-			return fmt.Errorf("failed to update ExternalArtifact: %w", err)
+		existingArtifact.Status.Artifact = artifact
+		if err := r.Status().Update(ctx, existingArtifact); err != nil {
+			return fmt.Errorf("failed to update ExternalArtifact status: %w", err)
 		}
 	}
 
@@ -1050,7 +1069,7 @@ func (r *ExternalSourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sourcev1alpha1.ExternalSource{}).
-		Owns(&sourcev1alpha1.ExternalArtifact{}).
+		Owns(&sourcev1.ExternalArtifact{}).
 		Named("externalsource").
 		Complete(r)
 }

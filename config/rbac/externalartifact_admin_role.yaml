@@ -1,7 +1,7 @@
 # This rule is not used by the project flux-externalsource-controller itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants full permissions ('*') over source.flux.oddkin.co.
+# Grants full permissions ('*') over source.toolkit.fluxcd.io ExternalArtifact resources.
 # This role is intended for users authorized to modify roles and bindings within the cluster,
 # enabling them to delegate specific permissions to other users or groups as needed.
 
@@ -14,13 +14,13 @@ metadata:
   name: externalartifact-admin-role
 rules:
 - apiGroups:
-  - source.flux.oddkin.co
+  - source.toolkit.fluxcd.io
   resources:
   - externalartifacts
   verbs:
   - '*'
 - apiGroups:
-  - source.flux.oddkin.co
+  - source.toolkit.fluxcd.io
   resources:
   - externalartifacts/status
   verbs:

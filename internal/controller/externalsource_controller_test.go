@@ -36,6 +36,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
 	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
@@ -665,14 +666,20 @@ var _ = Describe("ExternalSource Controller Integration", func() {
 			Expect(updatedResource.Status.LastHandledETag).To(Equal("test-etag"))
 
 			By("verifying ExternalArtifact child resource was created")
-			var externalArtifact sourcev1alpha1.ExternalArtifact
+			var externalArtifact sourcev1.ExternalArtifact
 			artifactKey := types.NamespacedName{
 				Name:      resourceName,
 				Namespace: "default",
 			}
 			Expect(k8sClient.Get(ctx, artifactKey, &externalArtifact)).To(Succeed())
-			Expect(externalArtifact.Spec.URL).To(Equal(updatedResource.Status.Artifact.URL))
-			Expect(externalArtifact.Spec.Revision).To(Equal(updatedResource.Status.Artifact.Revision))
+			// Verify sourceRef points to the ExternalSource
+			Expect(externalArtifact.Spec.SourceRef).NotTo(BeNil())
+			Expect(externalArtifact.Spec.SourceRef.Kind).To(Equal("ExternalSource"))
+			Expect(externalArtifact.Spec.SourceRef.Name).To(Equal(resourceName))
+			// Verify artifact data is in status
+			Expect(externalArtifact.Status.Artifact).NotTo(BeNil())
+			Expect(externalArtifact.Status.Artifact.URL).To(Equal(updatedResource.Status.Artifact.URL))
+			Expect(externalArtifact.Status.Artifact.Revision).To(Equal(updatedResource.Status.Artifact.Revision))
 
 			By("cleaning up the resource")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())

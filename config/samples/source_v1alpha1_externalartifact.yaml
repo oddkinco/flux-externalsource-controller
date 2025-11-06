@@ -1,13 +1,22 @@
-apiVersion: source.flux.oddkin.co/v1alpha1
-kind: ExternalArtifact
-metadata:
-  labels:
-    app.kubernetes.io/name: flux-externalsource-controller
-    app.kubernetes.io/managed-by: kustomize
-  name: externalartifact-sample
-spec:
-  url: https://storage.example.com/artifacts/config-abc123.tar.gz
-  revision: abc123def456
-  metadata:
-    source: externalsource-sample
-    contentType: application/json
+# NOTE: ExternalArtifact has been migrated to the official FluxCD source-controller API
+# This sample shows the structure, but use source.toolkit.fluxcd.io/v1 instead
+# 
+# Example ExternalArtifact (official FluxCD API):
+# apiVersion: source.toolkit.fluxcd.io/v1
+# kind: ExternalArtifact
+# metadata:
+#   name: externalartifact-sample
+# spec:
+#   sourceRef:
+#     kind: ExternalSource
+#     name: externalsource-sample
+#     namespace: default
+# status:
+#   artifact:
+#     url: https://storage.example.com/artifacts/config-abc123.tar.gz
+#     revision: abc123def456
+#     digest: sha256:abc123def456...
+#     lastUpdateTime: "2025-01-15T10:30:00Z"
+#     metadata:
+#       source: externalsource-sample
+#       contentType: application/json

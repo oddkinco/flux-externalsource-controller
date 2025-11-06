@@ -367,7 +367,8 @@ spec:
 
 			By("verifying that an ExternalArtifact was created")
 			verifyExternalArtifactCreated := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "externalartifact", "test-external-source", "-n", namespace, "-o", "jsonpath={.spec.url}")
+				// Check URL in status.artifact.url (official FluxCD API structure)
+				cmd := exec.Command("kubectl", "get", "externalartifact", "test-external-source", "-n", namespace, "-o", "jsonpath={.status.artifact.url}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).NotTo(BeEmpty())
