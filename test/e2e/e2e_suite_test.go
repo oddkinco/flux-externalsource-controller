@@ -121,11 +121,24 @@ var _ = BeforeSuite(func() {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
 
 	By("deploying the controller-manager for all test suites with PVC storage backend")
-	// Deploy with PVC patch using kustomize strategic merge
-	By("deploying controller with PVC storage backend")
+	// Deploy the controller with PVC patch included via e2e kustomize overlay
+	// The e2e overlay includes the PVC patch which adds volumeClaimTemplates, env vars, and volumeMounts
+	cmd = exec.Command("make", "manifests", "kustomize")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to generate manifests and install kustomize")
 	
-	// First deploy normally to get all resources
-	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+	// Set image in manager kustomization (same as make deploy does)
+	cmd = exec.Command("sh", "-c", fmt.Sprintf("cd config/manager && ../../bin/kustomize edit set image controller=%s", projectImage))
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to set image in kustomization")
+	
+	// Build and apply using e2e overlay which includes the PVC patch
+	cmd = exec.Command("./bin/kustomize", "build", "config/e2e")
+	manifests, err := utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build e2e kustomize config")
+	
+	cmd = exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifests)
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
 	
@@ -138,48 +151,6 @@ var _ = BeforeSuite(func() {
 		g.Expect(output).NotTo(BeEmpty())
 	}
 	EventuallyWithOffset(1, verifyStatefulSetExists).Should(Succeed())
-	
-	// Get the actual StatefulSet name (it has a prefix)
-	cmd = exec.Command("kubectl", "get", "statefulset", "-n", "flux-system", "-l", "control-plane=controller-manager", "-o", "jsonpath={.items[0].metadata.name}")
-	statefulSetName, err := utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to get StatefulSet name")
-	
-	// Patch env vars and volumeMounts (these can be patched)
-	By("patching StatefulSet with PVC environment variables and volume mounts")
-	envAndVolumePatch := `[{"op": "add", "path": "/spec/template/spec/containers/0/env/-", "value": {"name": "STORAGE_BACKEND", "value": "pvc"}}, {"op": "add", "path": "/spec/template/spec/containers/0/env/-", "value": {"name": "PVC_STORAGE_PATH", "value": "/data/artifacts"}}, {"op": "add", "path": "/spec/template/spec/containers/0/volumeMounts/-", "value": {"name": "artifact-storage", "mountPath": "/data/artifacts"}}]`
-	cmd = exec.Command("kubectl", "patch", "statefulset", statefulSetName, "-n", "flux-system", "--type", "json", "-p", envAndVolumePatch)
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to patch StatefulSet with PVC env and volumeMounts")
-	
-	// For volumeClaimTemplates, we need to delete and recreate the StatefulSet
-	// Get current StatefulSet YAML, add volumeClaimTemplates, and replace
-	By("recreating StatefulSet with volumeClaimTemplates")
-	cmd = exec.Command("kubectl", "get", "statefulset", statefulSetName, "-n", "flux-system", "-o", "yaml")
-	currentYAML, err := utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to get StatefulSet YAML")
-	
-	// Add volumeClaimTemplates before "  template:" if not present
-	if !strings.Contains(currentYAML, "volumeClaimTemplates:") {
-		vctYAML := `  volumeClaimTemplates:
-  - metadata:
-      name: artifact-storage
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      resources:
-        requests:
-          storage: 10Gi
-`
-		currentYAML = strings.Replace(currentYAML, "  template:", vctYAML+"  template:", 1)
-		
-		// Delete and recreate with volumeClaimTemplates
-		cmd = exec.Command("kubectl", "delete", "statefulset", statefulSetName, "-n", "flux-system", "--wait=true")
-		_, _ = utils.Run(cmd)
-		
-		cmd = exec.Command("kubectl", "apply", "-f", "-")
-		cmd.Stdin = strings.NewReader(currentYAML)
-		_, err = utils.Run(cmd)
-		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to recreate StatefulSet with volumeClaimTemplates")
-	}
 
 	By("waiting for controller-manager to be running")
 	verifyControllerRunning := func(g Gomega) {
