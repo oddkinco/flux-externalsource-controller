@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -104,6 +105,10 @@ var _ = BeforeSuite(func() {
 	_, err = utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
 
+	// Note: Kind clusters typically have a default StorageClass that works with PVCs
+	// If PVC_E2E_ENABLED is set, we'll use whatever default StorageClass exists
+	// The PVC patch doesn't specify a storageClassName, so it will use the default
+
 	// Deploy the controller for all test suites
 	By("creating flux-system namespace")
 	cmd = exec.Command("kubectl", "create", "ns", "flux-system")
@@ -117,9 +122,43 @@ var _ = BeforeSuite(func() {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
 
 	By("deploying the controller-manager for all test suites")
-	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
-	_, err = utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+	if os.Getenv("PVC_E2E_ENABLED") == "true" {
+		// Deploy with PVC patch using kustomize
+		By("deploying controller with PVC storage backend")
+		// Build base kustomization
+		cmd = exec.Command("kubectl", "kustomize", "config/manager")
+		baseManifest, err := utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build base kustomization")
+		
+		// Read PVC patch
+		pvcPatchBytes, err := os.ReadFile("config/manager/manager-pvc-patch.yaml")
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to read PVC patch file")
+		pvcPatch := string(pvcPatchBytes)
+		
+		// Replace image in both manifests
+		baseManifest = strings.ReplaceAll(baseManifest, "oddkin.co/flux-externalsource-controller:v0.0.1", projectImage)
+		pvcPatch = strings.ReplaceAll(pvcPatch, "oddkin.co/flux-externalsource-controller:v0.0.1", projectImage)
+		
+		// Apply base manifest first (without StatefulSet)
+		cmd = exec.Command("kubectl", "apply", "-f", "-")
+		cmd.Stdin = strings.NewReader(baseManifest)
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to apply base manifest")
+		
+		// Delete existing StatefulSet if it exists (volumeClaimTemplates can't be patched)
+		cmd = exec.Command("kubectl", "delete", "statefulset", "controller-manager", "-n", "flux-system", "--ignore-not-found=true", "--wait=false")
+		_, _ = utils.Run(cmd)
+		
+		// Apply PVC patch (which includes the StatefulSet with volumeClaimTemplates)
+		cmd = exec.Command("kubectl", "apply", "-f", "-")
+		cmd.Stdin = strings.NewReader(pvcPatch)
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to apply PVC patch")
+	} else {
+		cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+		_, err = utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+	}
 
 	By("waiting for controller-manager to be running")
 	verifyControllerRunning := func(g Gomega) {

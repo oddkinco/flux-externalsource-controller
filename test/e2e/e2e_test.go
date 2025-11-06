@@ -620,13 +620,12 @@ spec:
 			Eventually(verifyConfigLoaded).Should(Succeed())
 		})
 
-		// PVC Storage Backend test is marked as Pending as it requires additional cluster setup
-		// To run this test:
-		// 1. Deploy controller with PVC backend enabled
-		// 2. Ensure storageClass supports ReadWriteOnce
-		// 3. Run test with PVC_E2E_ENABLED=true environment variable
-		PIt("should successfully reconcile ExternalSource with PVC storage backend", func() {
-			Skip("PVC e2e test requires manual cluster setup - set PVC_E2E_ENABLED=true to run")
+		// PVC Storage Backend test requires hostPath storage support
+		// To run this test, set PVC_E2E_ENABLED=true environment variable
+		It("should successfully reconcile ExternalSource with PVC storage backend", func() {
+			if os.Getenv("PVC_E2E_ENABLED") != "true" {
+				Skip("PVC e2e test skipped - set PVC_E2E_ENABLED=true to run")
+			}
 
 			By("verifying StatefulSet is using PVC storage")
 			cmd := exec.Command("kubectl", "get", "statefulset", "controller-manager", "-n", namespace, "-o", "jsonpath={.spec.volumeClaimTemplates}")
