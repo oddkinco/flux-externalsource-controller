@@ -39,8 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	fluxmeta "github.com/fluxcd/pkg/apis/meta"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1alpha1 "github.com/oddkinco/flux-externalsource-controller/api/v1alpha1"
 	"github.com/oddkinco/flux-externalsource-controller/internal/artifact"
 	"github.com/oddkinco/flux-externalsource-controller/internal/config"
@@ -552,10 +552,8 @@ func (r *ExternalSourceReconciler) reconcileExternalArtifact(ctx context.Context
 
 	if needsUpdate {
 		log.Info("Updating ExternalArtifact", "name", artifactName, "url", artifactURL, "revision", revision)
-		existingArtifact.Status.Artifact = artifact
-		if err := r.Status().Update(ctx, existingArtifact); err != nil {
-			return fmt.Errorf("failed to update ExternalArtifact status: %w", err)
-		}
+		// Use retry logic for existing artifacts as well to handle conflicts and ensure status is set
+		return r.updateExternalArtifactStatusWithRetry(ctx, artifactKey, artifactName, artifact, artifactURL)
 	}
 
 	return nil
@@ -566,9 +564,14 @@ func (r *ExternalSourceReconciler) updateExternalArtifactStatusWithRetry(ctx con
 	log := logf.FromContext(ctx)
 	maxRetries := 10
 	for i := 0; i < maxRetries; i++ {
-		// Wait a bit before first attempt, longer for subsequent retries
+		// Wait a bit before each attempt to allow object to be available and avoid conflicts
+		// First attempt gets a small delay, subsequent retries get longer delays
 		if i > 0 {
 			time.Sleep(time.Duration(100*i) * time.Millisecond)
+		} else {
+			// Initial delay to allow object to be fully available after creation
+			// In CI environments, objects may take longer to be available
+			time.Sleep(200 * time.Millisecond)
 		}
 
 		// Re-fetch the created artifact to get the latest resourceVersion
@@ -620,6 +623,9 @@ func (r *ExternalSourceReconciler) updateExternalArtifactStatusWithRetry(ctx con
 		}
 
 		// Verify the status update persisted by re-fetching
+		// Add a small delay before verification to allow status to propagate
+		time.Sleep(100 * time.Millisecond)
+
 		verifyArtifact := &sourcev1.ExternalArtifact{}
 		if err := r.Get(ctx, artifactKey, verifyArtifact); err != nil {
 			log.Error(err, "Failed to verify ExternalArtifact status update", "name", artifactName)
@@ -628,9 +634,14 @@ func (r *ExternalSourceReconciler) updateExternalArtifactStatusWithRetry(ctx con
 				time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 				continue
 			}
-			// Status update succeeded but verification failed - assume it worked
-			log.Info("Status update succeeded but verification failed, assuming success", "name", artifactName)
-			return nil
+			// Status update succeeded but verification failed - this is concerning
+			// Try one more time with a longer delay before giving up
+			log.Info("Status update succeeded but verification failed, retrying verification", "name", artifactName)
+			time.Sleep(500 * time.Millisecond)
+			if err := r.Get(ctx, artifactKey, verifyArtifact); err != nil {
+				log.Error(err, "Verification still failed after additional retry", "name", artifactName)
+				return fmt.Errorf("failed to verify ExternalArtifact status update after %d attempts: %w", maxRetries, err)
+			}
 		}
 
 		// Check if status was actually set

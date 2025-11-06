@@ -1,19 +1,26 @@
 # Build stage
 FROM golang:1.25-alpine AS builder
+ARG TARGETARCH
 
 WORKDIR /workspace
 
 # Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
+
+# Download dependencies with cache mount to speed up subsequent builds
+# This layer will be cached unless go.mod or go.sum changes
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 # Copy source code
 COPY cmd/externalsource-hook-executor/ cmd/externalsource-hook-executor/
 COPY internal/ internal/
 COPY api/ api/
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
+# Build the binary with cache mounts for Go build cache and module cache
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
     go build -a -o externalsource-hook-executor ./cmd/externalsource-hook-executor
 
 # Runtime stage
